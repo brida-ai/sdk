@@ -17,5 +17,8 @@ WARNING: this repository is intended for public release. Treat every committed f
 13. Brida maintainers are the only merge/release authority unless repository governance explicitly changes.
 14. A low-risk AI/Reflex score never grants trust or merge authority.
 15. When uncertain whether information is public, do not publish it.
+16. Never run code from an external/fork pull request on a Brida self-hosted runner. Public untrusted PR CI must use disposable GitHub-hosted runners with no secrets.
+17. A workflow change inside a contributor PR does not gain authority to select trusted runner labels, protected environments, package publishing or deployment.
+18. Self-hosted runners are reserved for trusted maintainer/internal refs that pass explicit trust checks outside contributor-controlled code.
 
 Public contribution and security rules in CONTRIBUTING.md, SECURITY.md and GUIDELINES.md are mandatory.
