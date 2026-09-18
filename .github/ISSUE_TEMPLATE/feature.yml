@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a public capability, recipe, SDK or interoperability improvement.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: "Describe the public user/agent job. Internal implementation planning stays private."
+  - type: textarea
+    id: job
+    attributes:
+      label: User or agent job
+      description: What should a developer or agent be able to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Proposed public contract
+      description: Optional API, schema, recipe or example shape.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-safety check
+      options:
+        - label: This request contains no private Brida or customer information.
+          required: true

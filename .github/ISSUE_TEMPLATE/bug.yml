@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a problem in the public SDK, schema, recipe, example or docs.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include secrets, customer data, private Brida information or undisclosed security vulnerabilities."
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Minimal public/synthetic reproduction.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-safety check
+      options:
+        - label: I used only public or synthetic data.
+          required: true
