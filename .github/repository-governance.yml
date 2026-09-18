@@ -1,0 +1,13 @@
+version: 1
+repository_class: public-developer-sdk
+product: brida
+visibility_target: public
+data_class: public
+canonical_private_specs: false
+external_prs: allowed
+external_direct_push: denied
+merge_authority: brida-maintainers
+release_authority: brida-maintainers
+fork_ci_secrets: forbidden
+public_fixtures: synthetic-only
+arbitrary_contributor_code_execution: forbidden-by-default
