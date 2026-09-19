@@ -1,0 +1,39 @@
+{
+  "name": "@brida/sdk",
+  "version": "0.0.0-development",
+  "description": "Official TypeScript SDK for the Brida API",
+  "type": "module",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "check:public": "bash scripts/public-surface-check.sh",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:public"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10",
+    "@types/node": "^24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
