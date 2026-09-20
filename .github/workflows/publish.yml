@@ -1,5 +1,7 @@
-name: Publish npm package
+name: Publish npm release (Trusted Publishing)
 
+# Normal post-bootstrap release path. Requires npm Trusted Publisher configuration
+# for brida-ai/sdk -> .github/workflows/publish.yml after the package has been bootstrapped.
 on:
   release:
     types: [published]
