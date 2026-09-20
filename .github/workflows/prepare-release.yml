@@ -21,7 +21,7 @@ jobs:
   prepare:
     name: Open protected release PR
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -32,14 +32,23 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.21.0
+          run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          package-manager-cache: false
+          cache: pnpm
+
+      - name: Install from lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Verify release arithmetic
-        run: node --test scripts/release/version.test.mjs
+        run: pnpm exec vitest run scripts/release/version.test.mjs
 
       - name: Prepare manifest version
         id: plan
