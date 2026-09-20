@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: sdk-release-preparation
@@ -19,11 +18,9 @@ concurrency:
 
 jobs:
   prepare:
-    name: Open protected release PR
+    name: Prepare protected release branch
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout trusted main with release history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,11 +65,10 @@ jobs:
           changed="$(git status --short)"
           test "$changed" = " M package.json"
 
-      - name: Open release branch and pull request
+      - name: Push release branch
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${{ steps.plan.outputs.version }}"
           TAG="${{ steps.plan.outputs.tag }}"
           BRANCH="release/$TAG"
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
@@ -86,30 +82,17 @@ jobs:
           git commit -m "chore(release): $TAG"
           git push origin "$BRANCH"
 
-          cat > /tmp/release-pr.md <<EOF
-          ## Public change
-
-          Prepare the immutable public SDK release `$TAG`. This PR changes only release metadata; it does not bypass normal public CI or review.
-
-          ## Validation
-
-          - [x] Public release version was computed from immutable Git tag history.
-          - [x] No application/runtime behavior is changed by this release PR.
-          - [x] Commits are narrowly scoped and atomic.
-
-          ## Review / QA evidence
-
-          Final release publication runs full `pnpm check`, `npm pack --dry-run`, exact-tag verification, and publishes only the merge commit of this reviewed PR.
-
-          ## Compatibility / risk
-
-          Release-only manifest version update. npm publication remains governed by Trusted Publishing/OIDC after the one-time bootstrap in issue #19.
-
-          ## Release intent
-
-          - release-impact: none
-          - release-note: Prepare @brida/sdk $TAG for public publication.
-          - qa-scope: Public CI, public-surface scan, package tarball inspection, exact-tag release finalization.
-          EOF
-
-          gh pr create --repo "${{ github.repository }}" --base main --head "$BRANCH"             --title "chore(release): $TAG" --body-file /tmp/release-pr.md
+      - name: Require human-created release PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.plan.outputs.tag }}"
+          BRANCH="release/$TAG"
+          {
+            echo "## Release branch prepared"
+            echo
+            echo "Branch `$BRANCH` was pushed."
+            echo
+            echo "Open a normal pull request from `$BRANCH` to `main` and use the repository PR template."
+            echo "The PR must be created by a human/maintainer so normal `pull_request` CI is triggered; this workflow deliberately does not create the PR with `GITHUB_TOKEN`."
+          } >> "$GITHUB_STEP_SUMMARY"
