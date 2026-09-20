@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Public surface checks
         run: bash scripts/public-surface-check.sh
       - name: Whitespace check
