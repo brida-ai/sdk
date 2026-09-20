@@ -1,5 +1,7 @@
-name: Publish npm package
+name: Bootstrap npm package (first publish only)
 
+# Bootstrap-only path for the first public @brida/sdk package creation.
+# After npm Trusted Publishing is configured for publish.yml, retire this workflow.
 on:
   workflow_dispatch:
     inputs:
