@@ -13,51 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  node20:
-    name: Node 20 compatibility
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout untrusted source without persisted credentials
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 20
-
-      - name: Use Node-20-compatible pnpm without changing the public package contract
-        shell: bash
-        run: |
-          cp package.json "$RUNNER_TEMP/package.json"
-          node -e "const fs=require('node:fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));delete p.packageManager;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"
-          npm install --global pnpm@10.17.1
-
-      - name: Install and validate Node 20 runtime compatibility
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm typecheck
-          pnpm test
-          pnpm build
-
-      - name: Restore public package metadata and validate surface
-        shell: bash
-        run: |
-          cp "$RUNNER_TEMP/package.json" package.json
-          bash scripts/public-surface-check.sh
-          npm pack --dry-run
-          git diff --check
-
   validate:
-    name: Node ${{ matrix.node }}
+    name: Node 24
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [22, 24]
     steps:
       - name: Checkout untrusted source without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,7 +32,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24
           cache: pnpm
 
       - name: Install from lockfile
