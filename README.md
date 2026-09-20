@@ -2,7 +2,7 @@
 
 Official TypeScript SDK for the Brida API.
 
-> **Developer Preview:** this repository is staged for public release. Public contracts may expand, but released versions will not silently expose Brida's hosted provider routing, credentials, tenancy internals or policy implementation.
+> **Developer Preview source:** this SDK repository is public. The `@brida/sdk` npm package remains unpublished until the hosted Developer Preview release gate is complete. Public contracts may expand, but released versions will not silently expose Brida's hosted provider routing, credentials, tenancy internals or policy implementation.
 
 ## Install
 
