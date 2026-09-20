@@ -28,42 +28,40 @@ for path in "${files[@]}"; do
 done
 
 patterns=(
-  'BEGIN [A-Z ]*PRIVATE KEY'
-  'gh[pousr]_[A-Za-z0-9_]{20,}'
-  'sk-[A-Za-z0-9_-]{20,}'
-  'AKIA[0-9A-Z]{16}'
+  'private-key|BEGIN [A-Z ]*PRIVATE KEY'
+  'github-token|gh[pousr]_[A-Za-z0-9_]{20,}'
+  'openai-key|sk-[A-Za-z0-9_-]{20,}'
+  'aws-access-key|AKIA[0-9A-Z]{16}'
 )
 
-scan_pattern() {
-  local pattern="$1"
-  local path
+for entry in "${patterns[@]}"; do
+  label="${entry%%|*}"
+  pattern="${entry#*|}"
   for path in "${files[@]}"; do
     [[ -f "$path" && ! -L "$path" ]] || continue
-    if grep -I -nE "$pattern" -- "$path" >"$tmpdir/public-surface-match" 2>/dev/null; then
-      echo "possible secret pattern in $path: $pattern"
-      cat "$tmpdir/public-surface-match"
+    if grep -I -qE "$pattern" -- "$path" 2>/dev/null; then
+      echo "possible secret pattern: rule=$label path=$path (content redacted)"
       bad=1
     fi
   done
-}
-
-for pattern in "${patterns[@]}"; do
-  scan_pattern "$pattern"
 done
 
 context_pattern='(/home/|/Users/|private repo|internal-only|non-public hostname|internal account ID)'
 for path in "${files[@]}"; do
   [[ -f "$path" && ! -L "$path" ]] || continue
   case "$path" in
-    AGENTS.md|GUIDELINES.md|SECURITY.md|scripts/public-surface-check.sh)
+    AGENTS.md|GUIDELINES.md|SECURITY.md|scripts/public-surface-check.sh|scripts/history-leak-check.sh)
       continue
       ;;
   esac
-  if grep -I -nE "$context_pattern" -- "$path" >"$tmpdir/public-surface-context" 2>/dev/null; then
-    echo "possible private-context leak in $path:"
-    cat "$tmpdir/public-surface-context"
+  if grep -I -qE "$context_pattern" -- "$path" 2>/dev/null; then
+    echo "possible private-context leak: path=$path (content redacted)"
     bad=1
   fi
 done
+
+if ! bash scripts/history-leak-check.sh; then
+  bad=1
+fi
 
 exit "$bad"
