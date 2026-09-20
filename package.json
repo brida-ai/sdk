@@ -25,7 +25,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:policy": "node --test scripts/*.test.mjs",
+    "test:policy": "node --test scripts/check-pr-metadata.policy.mjs",
     "check:public": "bash scripts/public-surface-check.sh",
     "check": "pnpm typecheck && pnpm test && pnpm test:policy && pnpm build && pnpm check:public"
   },
