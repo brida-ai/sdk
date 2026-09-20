@@ -20,7 +20,7 @@ jobs:
   publish:
     name: Publish @brida/sdk
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, brida-fallback]
+    runs-on: ubuntu-latest
     environment: npm-release
     timeout-minutes: 15
     steps:
@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
-          cache: pnpm
+          package-manager-cache: false
 
       - name: Validate exact release version
         shell: bash
