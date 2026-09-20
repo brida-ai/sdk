@@ -62,7 +62,7 @@ export interface CustomReflexFixture {
   readonly id: string
   readonly evidenceClass: 'synthetic' | 'redacted'
   readonly state: JsonValue
-  readonly expectedBranch?: string
+  readonly expectedBranch: string
 }
 
 export interface ReflexVersionDefinition {
@@ -85,7 +85,7 @@ export interface ReflexDefinition {
     max_state_bytes: number
     data_class: ReflexDataClass
   }>
-  readonly authority?: 'recommendation_only' | (string & {})
+  readonly authority?: 'recommendation_only' | (string & {}) | undefined
 }
 
 export interface ReflexListResponse {
@@ -239,14 +239,14 @@ export class BridaClient {
       get: (reflexId) => this.#getReflex(reflexId),
       run: (reflexId, runOptions) => this.#runReflex(reflexId, runOptions),
       custom: Object.freeze({
-        draft: (draftOptions) => this.#draftCustomReflex(draftOptions),
-        activate: (reflexId, version, versionOptions) => this.#changeCustomReflexVersion(
+        draft: (draftOptions: DraftCustomReflexOptions) => this.#draftCustomReflex(draftOptions),
+        activate: (reflexId: string, version: string, versionOptions?: CustomReflexVersionOptions) => this.#changeCustomReflexVersion(
           'activate',
           reflexId,
           version,
           versionOptions,
         ),
-        retire: (reflexId, version, versionOptions) => this.#changeCustomReflexVersion(
+        retire: (reflexId: string, version: string, versionOptions?: CustomReflexVersionOptions) => this.#changeCustomReflexVersion(
           'retire',
           reflexId,
           version,
