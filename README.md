@@ -2,7 +2,7 @@
 
 Official TypeScript SDK for the Brida API.
 
-> **Developer Preview source:** this SDK repository is public. The `@brida/sdk` npm package remains unpublished until the hosted Developer Preview release gate is complete. Public contracts may expand, but released versions will not silently expose Brida's hosted provider routing, credentials, tenancy internals or policy implementation.
+> **Developer Preview:** the source repository is public. The npm package remains unpublished until the Reflex release gate is complete. Public contracts may expand, but released versions will not silently expose Brida's hosted provider routing, credentials, tenancy internals or policy implementation.
 
 ## Install
 
@@ -11,6 +11,10 @@ pnpm add @brida/sdk
 ```
 
 The package is not published until the Developer Preview release gate is complete.
+
+## API-key safety
+
+Use `@brida/sdk` only from trusted server-side code. Never embed `BRIDA_API_KEY` in browser, mobile, desktop-client, or other untrusted bundles, and never write the key to logs or analytics.
 
 ## Reflex quickstart
 
