@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict'
-import test from 'node:test'
+import { describe, expect, it } from 'vitest'
 
 import {
   formatTag,
@@ -8,38 +7,38 @@ import {
   parseVersionTag,
 } from './version.mjs'
 
-test('parses only stable semantic release tags', () => {
-  assert.deepEqual(parseVersionTag('v0.1.0'), { major: 0, minor: 1, patch: 0 })
-  assert.equal(parseVersionTag('0.1.0'), null)
-  assert.equal(parseVersionTag('v0.1.0-rc.1'), null)
-  assert.equal(parseVersionTag('backup/pre-release'), null)
-})
+describe('public SDK release version planner', () => {
+  it('parses only stable semantic release tags', () => {
+    expect(parseVersionTag('v0.1.0')).toEqual({ major: 0, minor: 1, patch: 0 })
+    expect(parseVersionTag('0.1.0')).toBeNull()
+    expect(parseVersionTag('v0.1.0-rc.1')).toBeNull()
+    expect(parseVersionTag('backup/pre-release')).toBeNull()
+  })
 
-test('finds the highest numeric version', () => {
-  assert.deepEqual(
-    highestVersion(['v0.1.9', 'v0.1.10', 'backup/pre-release']),
-    { major: 0, minor: 1, patch: 10 },
-  )
-})
+  it('finds the highest numeric version', () => {
+    expect(highestVersion(['v0.1.9', 'v0.1.10', 'backup/pre-release']))
+      .toEqual({ major: 0, minor: 1, patch: 10 })
+  })
 
-test('refuses to invent the first public SDK release', () => {
-  const plan = nextVersion([], 'patch')
-  assert.equal(plan.release, false)
-  assert.equal(plan.reason, 'bootstrap_required')
-})
+  it('refuses to invent the first public SDK release', () => {
+    const plan = nextVersion([], 'patch')
+    expect(plan.release).toBe(false)
+    expect(plan.reason).toBe('bootstrap_required')
+  })
 
-test('advances patch, minor, and major from release history', () => {
-  assert.equal(nextVersion(['v0.1.0'], 'patch').tag, 'v0.1.1')
-  assert.equal(nextVersion(['v0.1.7'], 'minor').tag, 'v0.2.0')
-  assert.equal(nextVersion(['v0.9.9'], 'major').tag, 'v1.0.0')
-})
+  it('advances patch, minor, and major from release history', () => {
+    expect(nextVersion(['v0.1.0'], 'patch').tag).toBe('v0.1.1')
+    expect(nextVersion(['v0.1.7'], 'minor').tag).toBe('v0.2.0')
+    expect(nextVersion(['v0.9.9'], 'major').tag).toBe('v1.0.0')
+  })
 
-test('rejects unknown release impacts', () => {
-  assert.throws(() => nextVersion(['v0.1.0'], 'banana'), /patch, minor, or major/u)
-})
+  it('rejects unknown release impacts', () => {
+    expect(() => nextVersion(['v0.1.0'], 'banana')).toThrow(/patch, minor, or major/u)
+  })
 
-test('formats a release tag symmetrically', () => {
-  const tag = formatTag({ major: 2, minor: 3, patch: 4 })
-  assert.equal(tag, 'v2.3.4')
-  assert.deepEqual(parseVersionTag(tag), { major: 2, minor: 3, patch: 4 })
+  it('formats a release tag symmetrically', () => {
+    const tag = formatTag({ major: 2, minor: 3, patch: 4 })
+    expect(tag).toBe('v2.3.4')
+    expect(parseVersionTag(tag)).toEqual({ major: 2, minor: 3, patch: 4 })
+  })
 })
