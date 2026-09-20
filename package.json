@@ -1,6 +1,6 @@
 {
   "name": "@brida/sdk",
-  "version": "0.0.0-development",
+  "version": "0.1.0",
   "description": "Official TypeScript SDK for the Brida API",
   "type": "module",
   "license": "Apache-2.0",
