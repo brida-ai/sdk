@@ -10,18 +10,18 @@ After the package exists, bind npm Trusted Publishing to:
 
 - organization: `brida-ai`;
 - repository: `sdk`;
-- workflow: `.github/workflows/publish.yml`.
+- workflow: `.github/workflows/finalize-release.yml`.
 
 Create the initial immutable `v0.1.0` Git tag on the exact source commit used for the manual npm publication. Do not use the automated release controller until this bootstrap and Trusted Publisher binding are complete.
 
 ## Normal release
 
 1. Run **Prepare SDK release** and choose `patch`, `minor`, or `major`.
-2. The controller computes the next version from the highest stable Git tag and opens `release/vX.Y.Z`.
-3. Review that release PR normally. Required public CI, public-surface checks, CODEOWNERS review, and conversation resolution still apply.
-4. Merge only after the review and QA evidence is complete.
-5. **Finalize SDK release** checks out the exact reviewed merge commit, reruns `pnpm check` and `npm pack --dry-run`, verifies the release identity, creates or verifies the immutable tag, and creates the GitHub Release.
-6. Publishing the GitHub Release invokes `publish.yml`, which publishes through npm Trusted Publishing/OIDC with provenance.
+2. The controller computes the next version from the highest stable Git tag and pushes `release/vX.Y.Z`.
+3. A maintainer opens a normal pull request from that branch to `main`. This human PR creation is deliberate: GitHub suppresses recursive workflow events generated with `GITHUB_TOKEN`, so the controller does not create a PR that could miss normal `pull_request` CI.
+4. Review that release PR normally. Required public CI, public-surface checks, CODEOWNERS review, and conversation resolution still apply.
+5. Merge only after the review and QA evidence is complete.
+6. **Finalize SDK release** checks out the exact reviewed merge commit, reruns `pnpm check` and `npm pack --dry-run`, verifies the release identity, creates or verifies the immutable tag, publishes through npm Trusted Publishing/OIDC with provenance, verifies npm visibility, and finally creates the GitHub Release.
 
 ## Invariants
 
@@ -29,7 +29,8 @@ Create the initial immutable `v0.1.0` Git tag on the exact source commit used fo
 - Never publish from a feature branch or pull-request head.
 - Never bypass public CI/review to prepare a routine release.
 - Never use a long-lived npm token in GitHub Actions.
-- The package version, release branch, tag and GitHub Release must identify the same version.
+- The package version, release branch, tag, npm package and GitHub Release must identify the same version.
 - A release retry must be idempotent: an existing tag is accepted only when it already names the exact reviewed release commit.
+- The npm Trusted Publisher is bound to the exact finalizer workflow that performs publication; publication does not depend on a second workflow being triggered by a `GITHUB_TOKEN`-created event.
 
 A genuine P0 security hotfix may use the owner-only emergency path defined by repository governance, but it still requires exact-SHA QA evidence and a follow-up review.
