@@ -25,8 +25,9 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:policy": "node --test scripts/*.test.mjs",
     "check:public": "bash scripts/public-surface-check.sh",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:public"
+    "check": "pnpm typecheck && pnpm test && pnpm test:policy && pnpm build && pnpm check:public"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
