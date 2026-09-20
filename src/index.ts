@@ -17,19 +17,75 @@ export type ReflexDataClass =
 
 export type ReflexVersionStatus = 'draft' | 'active' | 'retired' | (string & {})
 
+export type ReflexQuestion =
+  | Readonly<{
+      type: 'binary'
+      instructions: JsonValue
+      criteria?: Readonly<{ true?: JsonValue | null; false?: JsonValue | null }>
+    }>
+  | Readonly<{
+      type: 'choice'
+      instructions: JsonValue
+      criteria: Readonly<Record<string, JsonValue | null>>
+    }>
+  | Readonly<{
+      type: 'score'
+      instructions: JsonValue
+      criteria: readonly (JsonValue | null)[]
+    }>
+
+export type ReflexDeclarativePolicy =
+  | Readonly<{
+      type: 'binary'
+      questionId: string
+      trueBranch: string
+      falseBranch: string
+      uncertainBranch: string
+      trueWhenProbabilityAtLeast: number
+      falseWhenProbabilityAtMost: number
+    }>
+  | Readonly<{
+      type: 'choice'
+      questionId: string
+      branches: Readonly<Record<string, string>>
+      minimumSelectedProbability: number
+      uncertainBranch: string
+    }>
+  | Readonly<{
+      type: 'score'
+      questionId: string
+      thresholds: readonly Readonly<{ atLeast: number; branch: string }>[]
+      belowBranch: string
+    }>
+
+export interface CustomReflexFixture {
+  readonly id: string
+  readonly evidenceClass: 'synthetic' | 'redacted'
+  readonly state: JsonValue
+  readonly expectedBranch?: string
+}
+
+export interface ReflexVersionDefinition {
+  readonly version: string
+  readonly status: ReflexVersionStatus
+  readonly question_set_version?: string
+  readonly questions?: Readonly<Record<string, ReflexQuestion>>
+  readonly policy_version?: string
+  readonly declarative_policy?: ReflexDeclarativePolicy
+  readonly fixtures?: readonly CustomReflexFixture[]
+}
+
 export interface ReflexDefinition {
   readonly id: string
   readonly name: string
-  readonly trust_class: 'official' | (string & {})
+  readonly trust_class: 'official' | 'organization_custom' | (string & {})
   readonly active_version: string | null
-  readonly versions: readonly Readonly<{
-    version: string
-    status: ReflexVersionStatus
-  }>[]
+  readonly versions: readonly ReflexVersionDefinition[]
   readonly input: Readonly<{
     max_state_bytes: number
     data_class: ReflexDataClass
   }>
+  readonly authority?: 'recommendation_only' | (string & {})
 }
 
 export interface ReflexListResponse {
@@ -65,6 +121,23 @@ export interface ReflexRunResult {
   }>
   readonly receipt_id: string
   readonly trace_id: string
+}
+
+export interface DraftCustomReflexOptions {
+  readonly id: string
+  readonly version: string
+  readonly name: string
+  readonly maxStateBytes: number
+  readonly questionSetVersion: string
+  readonly questions: Readonly<Record<string, ReflexQuestion>>
+  readonly policyVersion: string
+  readonly declarativePolicy: ReflexDeclarativePolicy
+  readonly fixtures: readonly CustomReflexFixture[]
+  readonly signal?: AbortSignal
+}
+
+export interface CustomReflexVersionOptions {
+  readonly signal?: AbortSignal
 }
 
 export interface RunReflexOptions {
@@ -146,6 +219,11 @@ export class BridaClient {
     list(): Promise<ReflexListResponse>
     get(reflexId: string): Promise<ReflexDefinition>
     run(reflexId: string, options: RunReflexOptions): Promise<ReflexRunResult>
+    custom: Readonly<{
+      draft(options: DraftCustomReflexOptions): Promise<ReflexDefinition>
+      activate(reflexId: string, version: string, options?: CustomReflexVersionOptions): Promise<ReflexDefinition>
+      retire(reflexId: string, version: string, options?: CustomReflexVersionOptions): Promise<ReflexDefinition>
+    }>
   }>
 
   constructor(options: BridaClientOptions) {
@@ -160,6 +238,21 @@ export class BridaClient {
       list: () => this.#listReflexes(),
       get: (reflexId) => this.#getReflex(reflexId),
       run: (reflexId, runOptions) => this.#runReflex(reflexId, runOptions),
+      custom: Object.freeze({
+        draft: (draftOptions) => this.#draftCustomReflex(draftOptions),
+        activate: (reflexId, version, versionOptions) => this.#changeCustomReflexVersion(
+          'activate',
+          reflexId,
+          version,
+          versionOptions,
+        ),
+        retire: (reflexId, version, versionOptions) => this.#changeCustomReflexVersion(
+          'retire',
+          reflexId,
+          version,
+          versionOptions,
+        ),
+      }),
     })
   }
 
@@ -171,6 +264,59 @@ export class BridaClient {
   async #getReflex(reflexId: string): Promise<ReflexDefinition> {
     const id = boundedIdentifier(reflexId, 'reflexId')
     const body = await this.#request(`/v1/reflexes/${encodeURIComponent(id)}`, { method: 'GET' })
+    return parseReflexDefinition(body)
+  }
+
+  async #draftCustomReflex(options: DraftCustomReflexOptions): Promise<ReflexDefinition> {
+    const id = validateReflexId(options.id)
+    const version = validateReflexVersion(options.version)
+    const name = boundedToken(options.name, 'name', 120)
+    if (!Number.isSafeInteger(options.maxStateBytes) || options.maxStateBytes < 1 || options.maxStateBytes > 262_144) {
+      throw new TypeError('maxStateBytes must be an integer from 1 to 262144')
+    }
+    const questionSetVersion = boundedToken(options.questionSetVersion, 'questionSetVersion', 128)
+    const policyVersion = boundedToken(options.policyVersion, 'policyVersion', 128)
+    validateJson(options.questions, 'questions')
+    validateJson(options.declarativePolicy, 'declarativePolicy')
+    validateJson(options.fixtures, 'fixtures')
+    if (options.fixtures.length < 1 || options.fixtures.length > 32) {
+      throw new TypeError('fixtures must contain 1 to 32 examples')
+    }
+
+    const body = await this.#request('/v1/reflexes/custom', {
+      method: 'POST',
+      body: {
+        id,
+        version,
+        name,
+        max_state_bytes: options.maxStateBytes,
+        data_class: 'non_sensitive',
+        question_set_version: questionSetVersion,
+        questions: options.questions,
+        policy_version: policyVersion,
+        declarative_policy: options.declarativePolicy,
+        fixtures: options.fixtures,
+      },
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    })
+    return parseReflexDefinition(body)
+  }
+
+  async #changeCustomReflexVersion(
+    action: 'activate' | 'retire',
+    reflexId: string,
+    version: string,
+    options: CustomReflexVersionOptions = {},
+  ): Promise<ReflexDefinition> {
+    const id = validateReflexId(reflexId)
+    const normalizedVersion = validateReflexVersion(version)
+    const body = await this.#request(
+      `/v1/reflexes/${encodeURIComponent(id)}/versions/${encodeURIComponent(normalizedVersion)}/${action}`,
+      {
+        method: 'POST',
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      },
+    )
     return parseReflexDefinition(body)
   }
 
@@ -272,6 +418,20 @@ function boundedToken(value: string, field: string, maximum: number): string {
   return normalized
 }
 
+function validateReflexId(value: string): string {
+  const normalized = value.trim()
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(normalized) || normalized.length > 64) {
+    throw new TypeError('reflexId is invalid')
+  }
+  return normalized
+}
+
+function validateReflexVersion(value: string): string {
+  const normalized = value.trim()
+  if (!/^[1-9][0-9]{0,8}$/u.test(normalized)) throw new TypeError('version is invalid')
+  return normalized
+}
+
 function validateIdempotencyKey(value: string): string {
   const normalized = value.trim()
   if (!/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,254}$/u.test(normalized)) {
@@ -361,9 +521,27 @@ function parseReflexDefinition(value: unknown): ReflexDefinition {
   }
   const versions = value.versions.map((item) => {
     if (!isRecord(item)) throw new BridaResponseError('A Brida Reflex version failed contract validation.')
+    const questions = item.questions === undefined
+      ? undefined
+      : parseQuestions(item.questions)
+    const declarativePolicy = item.declarative_policy === undefined
+      ? undefined
+      : parseDeclarativePolicy(item.declarative_policy)
+    const fixtures = item.fixtures === undefined
+      ? undefined
+      : parseCustomFixtures(item.fixtures)
     return Object.freeze({
       version: requiredString(item.version, 'version'),
       status: requiredString(item.status, 'status') as ReflexVersionStatus,
+      ...(item.question_set_version === undefined
+        ? {}
+        : { question_set_version: requiredString(item.question_set_version, 'question_set_version') }),
+      ...(questions === undefined ? {} : { questions }),
+      ...(item.policy_version === undefined
+        ? {}
+        : { policy_version: requiredString(item.policy_version, 'policy_version') }),
+      ...(declarativePolicy === undefined ? {} : { declarative_policy: declarativePolicy }),
+      ...(fixtures === undefined ? {} : { fixtures }),
     })
   })
   const maxStateBytes = requiredNonNegativeInteger(value.input.max_state_bytes, 'input.max_state_bytes')
@@ -381,7 +559,46 @@ function parseReflexDefinition(value: unknown): ReflexDefinition {
       max_state_bytes: maxStateBytes,
       data_class: requiredString(value.input.data_class, 'input.data_class') as ReflexDataClass,
     }),
+    ...(value.authority === undefined
+      ? {}
+      : { authority: requiredString(value.authority, 'authority') as ReflexDefinition['authority'] }),
   })
+}
+
+function parseQuestions(value: unknown): Readonly<Record<string, ReflexQuestion>> {
+  if (!isRecord(value)) throw new BridaResponseError('Custom Reflex questions failed contract validation.')
+  validateJson(value, 'questions')
+  return Object.freeze({ ...value }) as Readonly<Record<string, ReflexQuestion>>
+}
+
+function parseDeclarativePolicy(value: unknown): ReflexDeclarativePolicy {
+  if (!isRecord(value) || !['binary', 'choice', 'score'].includes(String(value.type))) {
+    throw new BridaResponseError('Custom Reflex declarative policy failed contract validation.')
+  }
+  validateJson(value, 'declarative_policy')
+  return Object.freeze({ ...value }) as unknown as ReflexDeclarativePolicy
+}
+
+function parseCustomFixtures(value: unknown): readonly CustomReflexFixture[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 32) {
+    throw new BridaResponseError('Custom Reflex fixtures failed contract validation.')
+  }
+  return Object.freeze(value.map((item, index) => {
+    if (!isRecord(item)) throw new BridaResponseError('A Custom Reflex fixture failed contract validation.')
+    const evidenceClass = requiredString(item.evidenceClass, `fixtures.${index}.evidenceClass`)
+    if (evidenceClass !== 'synthetic' && evidenceClass !== 'redacted') {
+      throw new BridaResponseError('A Custom Reflex fixture evidence class is invalid.')
+    }
+    validateJson(item.state, `fixtures.${index}.state`)
+    return Object.freeze({
+      id: requiredString(item.id, `fixtures.${index}.id`),
+      evidenceClass,
+      state: item.state as JsonValue,
+      ...(item.expectedBranch === undefined
+        ? {}
+        : { expectedBranch: requiredString(item.expectedBranch, `fixtures.${index}.expectedBranch`) }),
+    })
+  }))
 }
 
 function parseReflexRun(value: unknown): ReflexRunResult {
