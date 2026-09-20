@@ -22,6 +22,39 @@ const definition = {
   input: { max_state_bytes: 32768, data_class: 'non_sensitive' },
 }
 
+const customDefinition = {
+  id: 'lead-fit',
+  name: 'Lead fit',
+  trust_class: 'organization_custom',
+  active_version: '1',
+  versions: [{
+    version: '1',
+    status: 'active',
+    question_set_version: 'lead-fit-questions@1',
+    questions: {
+      qualified: { type: 'binary', instructions: 'Is this lead qualified?' },
+    },
+    policy_version: 'lead-fit-policy@1',
+    declarative_policy: {
+      type: 'binary',
+      questionId: 'qualified',
+      trueBranch: 'qualified',
+      falseBranch: 'ignore',
+      uncertainBranch: 'review',
+      trueWhenProbabilityAtLeast: 0.8,
+      falseWhenProbabilityAtMost: 0.2,
+    },
+    fixtures: [{
+      id: 'synthetic-qualified',
+      evidenceClass: 'synthetic',
+      state: { company: 'Synthetic Co' },
+      expectedBranch: 'qualified',
+    }],
+  }],
+  input: { max_state_bytes: 8192, data_class: 'non_sensitive' },
+  authority: 'recommendation_only',
+}
+
 const run = {
   id: 'rfxrun_1',
   object: 'reflex.run',
@@ -73,6 +106,130 @@ describe('BridaClient Reflex', () => {
     const detail = await client.reflex.get('agent-wakeup')
     expect(listed.data[0]?.input.data_class).toBe('non_sensitive')
     expect(detail.active_version).toBe('3')
+  })
+
+  it('drafts a bounded Custom Reflex with the exact public authoring contract', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe(`${BRIDA_API_URL}/v1/reflexes/custom`)
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        id: 'lead-fit',
+        version: '1',
+        name: 'Lead fit',
+        max_state_bytes: 8192,
+        data_class: 'non_sensitive',
+        question_set_version: 'lead-fit-questions@1',
+        questions: {
+          qualified: { type: 'binary', instructions: 'Is this lead qualified?' },
+        },
+        policy_version: 'lead-fit-policy@1',
+        declarative_policy: {
+          type: 'binary',
+          questionId: 'qualified',
+          trueBranch: 'qualified',
+          falseBranch: 'ignore',
+          uncertainBranch: 'review',
+          trueWhenProbabilityAtLeast: 0.8,
+          falseWhenProbabilityAtMost: 0.2,
+        },
+        fixtures: [{
+          id: 'synthetic-qualified',
+          evidenceClass: 'synthetic',
+          state: { company: 'Synthetic Co' },
+          expectedBranch: 'qualified',
+        }],
+      })
+      return jsonResponse({
+        ...customDefinition,
+        active_version: null,
+        versions: [{ ...customDefinition.versions[0], status: 'draft' }],
+      }, 201)
+    })
+    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const drafted = await client.reflex.custom.draft({
+      id: 'lead-fit',
+      version: '1',
+      name: 'Lead fit',
+      maxStateBytes: 8192,
+      questionSetVersion: 'lead-fit-questions@1',
+      questions: {
+        qualified: { type: 'binary', instructions: 'Is this lead qualified?' },
+      },
+      policyVersion: 'lead-fit-policy@1',
+      declarativePolicy: {
+        type: 'binary',
+        questionId: 'qualified',
+        trueBranch: 'qualified',
+        falseBranch: 'ignore',
+        uncertainBranch: 'review',
+        trueWhenProbabilityAtLeast: 0.8,
+        falseWhenProbabilityAtMost: 0.2,
+      },
+      fixtures: [{
+        id: 'synthetic-qualified',
+        evidenceClass: 'synthetic',
+        state: { company: 'Synthetic Co' },
+        expectedBranch: 'qualified',
+      }],
+    })
+    expect(drafted).toMatchObject({
+      id: 'lead-fit',
+      trust_class: 'organization_custom',
+      active_version: null,
+      versions: [{
+        version: '1',
+        status: 'draft',
+        question_set_version: 'lead-fit-questions@1',
+      }],
+      authority: 'recommendation_only',
+    })
+  })
+
+  it('activates and retires Custom Reflex versions through explicit lifecycle endpoints', async () => {
+    const requests: string[] = []
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push(`${init?.method} ${new URL(String(url)).pathname}`)
+      return jsonResponse(customDefinition)
+    })
+    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    await expect(client.reflex.custom.activate('lead-fit', '1')).resolves.toMatchObject({
+      id: 'lead-fit',
+      trust_class: 'organization_custom',
+      active_version: '1',
+    })
+    await expect(client.reflex.custom.retire('lead-fit', '1')).resolves.toMatchObject({
+      id: 'lead-fit',
+      trust_class: 'organization_custom',
+    })
+    expect(requests).toEqual([
+      'POST /v1/reflexes/lead-fit/versions/1/activate',
+      'POST /v1/reflexes/lead-fit/versions/1/retire',
+    ])
+  })
+
+  it('rejects malformed Custom Reflex authoring inputs before network execution', async () => {
+    const fetchMock = vi.fn()
+    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    await expect(client.reflex.custom.draft({
+      id: 'Bad Id',
+      version: '1',
+      name: 'Bad',
+      maxStateBytes: 8192,
+      questionSetVersion: 'bad@1',
+      questions: {},
+      policyVersion: 'bad@1',
+      declarativePolicy: {
+        type: 'binary',
+        questionId: 'q',
+        trueBranch: 'yes',
+        falseBranch: 'no',
+        uncertainBranch: 'review',
+        trueWhenProbabilityAtLeast: 0.8,
+        falseWhenProbabilityAtMost: 0.2,
+      },
+      fixtures: [],
+    })).rejects.toThrow(/reflexId/u)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('maps the public run contract and preserves caller idempotency exactly', async () => {
