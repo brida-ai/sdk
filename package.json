@@ -35,5 +35,13 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brida-ai/sdk.git"
+  },
+  "homepage": "https://github.com/brida-ai/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/brida-ai/sdk/issues"
   }
 }
