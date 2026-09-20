@@ -57,6 +57,50 @@ const result = await brida.reflex.run('agent-wakeup', {
 
 Reuse a key **only** when retrying the exact same Reflex request after an unknown outcome. The SDK does not automatically retry a run. If you omit the key, the SDK creates one for that call; API and transport errors expose `error.idempotencyKey` so the same request can be retried safely.
 
+## Custom Reflex
+
+Use a private Organization-scoped Custom Reflex when no official recipe matches a bounded semantic decision. Drafting does **not** activate it; activation is a separate explicit operation.
+
+```ts
+const draft = await brida.reflex.custom.draft({
+  id: 'lead-fit',
+  version: '1',
+  name: 'Lead fit',
+  maxStateBytes: 8192,
+  questionSetVersion: 'lead-fit-questions@1',
+  questions: {
+    qualified: {
+      type: 'binary',
+      instructions: 'Is this lead a good fit for the stated ICP?',
+    },
+  },
+  policyVersion: 'lead-fit-policy@1',
+  declarativePolicy: {
+    type: 'binary',
+    questionId: 'qualified',
+    trueBranch: 'qualified',
+    falseBranch: 'ignore',
+    uncertainBranch: 'review',
+    trueWhenProbabilityAtLeast: 0.8,
+    falseWhenProbabilityAtMost: 0.2,
+  },
+  fixtures: [{
+    id: 'synthetic-qualified',
+    evidenceClass: 'synthetic',
+    state: { company: 'Synthetic Co', employeeCount: 25 },
+    expectedBranch: 'qualified',
+  }],
+})
+
+await brida.reflex.custom.activate(draft.id, '1')
+
+const result = await brida.reflex.run('lead-fit', {
+  state: { company: 'Example Co', employeeCount: 30 },
+})
+```
+
+Custom Reflex definitions are declarative only: bounded questions, bounded branch policy, synthetic or redacted fixtures, explicit activation, and immutable active versions. They never grant tool or side-effect authority. During Free Preview use only non-sensitive state and never place credentials or reusable secrets in fixtures or run state.
+
 ## Data class
 
 `brida.reflex.list()` and `brida.reflex.get()` expose each Reflex's input `data_class`. Do not send data outside the declared class. A Reflex marked `non_sensitive` is not an approved channel for sensitive personal or regulated data.
