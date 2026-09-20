@@ -594,9 +594,7 @@ function parseCustomFixtures(value: unknown): readonly CustomReflexFixture[] {
       id: requiredString(item.id, `fixtures.${index}.id`),
       evidenceClass,
       state: item.state as JsonValue,
-      ...(item.expectedBranch === undefined
-        ? {}
-        : { expectedBranch: requiredString(item.expectedBranch, `fixtures.${index}.expectedBranch`) }),
+      expectedBranch: requiredString(item.expectedBranch, `fixtures.${index}.expectedBranch`),
     })
   }))
 }
