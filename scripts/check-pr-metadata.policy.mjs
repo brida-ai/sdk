@@ -29,3 +29,20 @@ test('rejects missing or invalid metadata', () => {
   assert.match(result.stderr, /release-note/u)
   assert.match(result.stderr, /qa-scope/u)
 })
+
+test('rejects untouched template placeholders', () => {
+  const result = run([
+    '- release-impact: none',
+    '- release-note: Describe the public-facing change, or `none` when no release note is needed.',
+    '- qa-scope: Describe the exact public checks required for this change.',
+  ].join('\n'))
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /placeholder/u)
+})
+
+test('requires real release notes for versioned changes and real QA scope', () => {
+  const result = run('- release-impact: minor\n- release-note: none\n- qa-scope: none\n')
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /real release-note/u)
+  assert.match(result.stderr, /qa-scope cannot be none/u)
+})
