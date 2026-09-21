@@ -9,13 +9,17 @@ const MAINTAINER_ONLY = [
   /^package\.json$/u,
   /^pnpm-lock\.yaml$/u,
   /^\.npmrc$/u,
-  /^(?:AGENTS\.md|GUIDELINES\.md|SECURITY\.md|RELEASING\.md|CONTRIBUTING\.md|LICENSE)$/u,
+  /^(?:AGENTS\.md|ARCHITECTURE\.md|GUIDELINES\.md|SECURITY\.md|RELEASING\.md|CONTRIBUTING\.md|LICENSE)$/u,
 ]
+const PRODUCT_CATALOG = /^(?:examples|fixtures|patterns|recipes|skills)(?:\/|$)/u
 
 export function checkExternalPullRequestFiles(files) {
   for (const file of files) {
     const candidates = [file.filename, file.previous_filename].filter((value) => typeof value === 'string')
     for (const path of candidates) {
+      if (PRODUCT_CATALOG.test(path)) {
+        throw new Error(`product catalog path belongs in a product repository: ${path}`)
+      }
       if (MAINTAINER_ONLY.some((pattern) => pattern.test(path))) {
         throw new Error(`external PR may not change maintainer-only control-plane path: ${path}`)
       }
