@@ -31,6 +31,8 @@ Future released Brida products can add sibling namespaces without changing the b
 
 ## Install
 
+Requires Node.js 22 or newer. Public CI covers the current Node 22 and Node 24 LTS lines.
+
 ```bash
 pnpm add @brida/sdk
 ```

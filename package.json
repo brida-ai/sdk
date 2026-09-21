@@ -7,7 +7,7 @@
   "sideEffects": false,
   "packageManager": "pnpm@11.21.0",
   "engines": {
-    "node": ">=24"
+    "node": ">=22.0.0"
   },
   "files": [
     "dist",
