@@ -24,6 +24,7 @@ jobs:
       source_sha: ${{ steps.plan.outputs.source_sha }}
       version: ${{ steps.plan.outputs.version }}
       tag: ${{ steps.plan.outputs.tag }}
+      previous_version: ${{ steps.plan.outputs.previous_version }}
     steps:
       - name: Checkout trusted main without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,7 +46,7 @@ jobs:
           cache: pnpm
 
       - name: Install from lockfile
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Verify release arithmetic
         run: pnpm exec vitest run scripts/release/version.test.mjs
@@ -56,22 +57,15 @@ jobs:
         run: |
           set -euo pipefail
           SOURCE_SHA="$(git rev-parse HEAD)"
-          node scripts/release/prepare.mjs --impact "${{ inputs.impact }}" --apply | tee /tmp/release-plan.json
+          node scripts/release/prepare.mjs --impact "${{ inputs.impact }}" | tee /tmp/release-plan.json
           VERSION="$(node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('/tmp/release-plan.json','utf8').trim());process.stdout.write(x.version)")"
+          PREVIOUS_VERSION="$(node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('/tmp/release-plan.json','utf8').trim());process.stdout.write(x.previousVersion)")"
           TAG="v$VERSION"
-          CHANGED="$(git status --short)"
-          test "$CHANGED" = " M package.json"
+          test -z "$(git status --short)"
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Upload exact prepared manifest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: sdk-release-manifest-${{ steps.plan.outputs.source_sha }}
-          path: package.json
-          if-no-files-found: error
-          retention-days: 1
+          echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
 
   branch:
     name: Create protected release branch
@@ -88,12 +82,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Download prepared manifest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: sdk-release-manifest-${{ needs.plan.outputs.source_sha }}
-          path: /tmp/sdk-release-manifest
-
       - name: Create and push release branch
         shell: bash
         run: |
@@ -108,9 +96,19 @@ jobs:
             echo "Release branch already exists: $BRANCH" >&2
             exit 1
           fi
-          cp /tmp/sdk-release-manifest/package.json package.json
+          test -z "$(git status --short)"
+          test "$(node -p "require('./package.json').name")" = "@brida/sdk"
+          test "$(node -p "require('./package.json').version")" = "${{ needs.plan.outputs.previous_version }}"
+          TARGET_VERSION="${{ needs.plan.outputs.version }}" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
+          manifest.version = process.env.TARGET_VERSION
+          writeFileSync('package.json', `${JSON.stringify(manifest, null, 2)}\n`)
+          NODE
+          test "$(node -p "require('./package.json').name")" = "@brida/sdk"
           test "$(node -p "require('./package.json').version")" = "${{ needs.plan.outputs.version }}"
-          test "$(git status --short)" = " M package.json"
+          test "$(git diff --name-only)" = "package.json"
+          git diff --check
           git config user.name "brida-release"
           git config user.email "release@brida.ai"
           git switch -c "$BRANCH"

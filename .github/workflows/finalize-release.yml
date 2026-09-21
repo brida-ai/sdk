@@ -47,7 +47,7 @@ jobs:
           cache: pnpm
 
       - name: Install from lockfile
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Re-run the full public release gates
         run: |

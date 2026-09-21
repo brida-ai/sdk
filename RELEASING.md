@@ -17,11 +17,11 @@ Create the initial immutable `v0.1.0` Git tag on the exact source commit used fo
 ## Normal release
 
 1. Run **Prepare SDK release** and choose `patch`, `minor`, or `major`.
-2. A read-only planning job computes the next version from the highest stable Git tag, verifies release arithmetic, and uploads only the prepared `package.json`. A separate `contents: write` job receives no dependency-install/test execution authority and pushes `release/vX.Y.Z` from the exact verified `main` SHA.
+2. A read-only planning job computes the next version from immutable tag history and emits only the verified source SHA plus previous/next version identity. A separate `contents: write` job receives no dependency-install/test execution authority, checks that the source manifest still matches the previous release, changes only its `version` field with Node built-ins, and pushes `release/vX.Y.Z` from the exact verified `main` SHA.
 3. A maintainer opens a normal pull request from that branch to `main`. This human PR creation is deliberate: GitHub suppresses recursive workflow events generated with `GITHUB_TOKEN`, so the controller does not create a PR that could miss normal `pull_request` CI.
 4. Review that release PR normally. Required public CI, public-surface checks, CODEOWNERS review, and conversation resolution still apply.
 5. Merge only after the review and QA evidence is complete.
-6. **Finalize SDK release** uses privilege-separated jobs: a read-only verifier checks the exact reviewed merge commit and builds one tarball; a `contents: write` tag job creates/verifies the immutable source tag without running dependencies; a dedicated `contents: read` + `id-token: write` job verifies the tarball SHA-256 and publishes only that artifact through npm Trusted Publishing/OIDC with provenance; a final `contents: write` job creates the GitHub Release after npm visibility is confirmed.
+6. **Finalize SDK release** uses privilege-separated jobs: a read-only verifier installs with dependency lifecycle scripts disabled, checks the exact reviewed merge commit and builds one tarball; a `contents: write` tag job creates/verifies the immutable source tag without running dependencies; a dedicated `contents: read` + `id-token: write` job verifies the tarball SHA-256 and publishes only that artifact through npm Trusted Publishing/OIDC with provenance; a final `contents: write` job creates the GitHub Release after npm visibility is confirmed.
 
 ## Invariants
 
