@@ -22,3 +22,5 @@ WARNING: this repository is intended for public release. Treat every committed f
 18. Self-hosted runners are reserved for trusted maintainer/internal refs that pass explicit trust checks outside contributor-controlled code.
 
 Public contribution and security rules in CONTRIBUTING.md, SECURITY.md and GUIDELINES.md are mandatory.
+19. This is one platform SDK. Product APIs are namespaces on the root `Brida` client; do not create a separate base SDK/client/auth stack per product.
+20. Product recipes, templates, Skills and use-case catalogs belong in the corresponding public product repository. Keep only minimal SDK-syntax snippets here and link to the product repository for substantive examples.

@@ -55,7 +55,7 @@ The bootstrap is an exact-artifact ceremony:
    cd "$CONSUMER_DIR"
    npm init -y >/dev/null
    npm install @brida/sdk@0.1.0 --ignore-scripts
-   node --input-type=module -e "import { BridaClient, createIdempotencyKey } from '@brida/sdk'; const client = new BridaClient({ apiKey: 'brida_test_key' }); if (typeof client.reflex.run !== 'function' || !createIdempotencyKey().startsWith('brida_')) process.exit(1)"
+   node --input-type=module -e "import { Brida, createIdempotencyKey } from '@brida/sdk'; const client = new Brida({ apiKey: 'brida_test_key' }); if (typeof client.reflex.run !== 'function' || !createIdempotencyKey().startsWith('brida_')) process.exit(1)"
    ```
 
 7. Only after the registry and clean-consumer checks pass, create the annotated `v0.1.0` tag on the exact `SOURCE_SHA` used to build the published tarball, push it once, and create the GitHub Release:

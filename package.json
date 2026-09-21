@@ -1,7 +1,7 @@
 {
   "name": "@brida/sdk",
   "version": "0.1.0",
-  "description": "Official TypeScript SDK for the Brida API",
+  "description": "Official TypeScript SDK for the Brida platform",
   "type": "module",
   "license": "Apache-2.0",
   "sideEffects": false,
@@ -12,7 +12,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "ARCHITECTURE.md"
   ],
   "exports": {
     ".": {
@@ -44,5 +45,11 @@
   "homepage": "https://github.com/brida-ai/sdk#readme",
   "bugs": {
     "url": "https://github.com/brida-ai/sdk/issues"
-  }
+  },
+  "keywords": [
+    "brida",
+    "sdk",
+    "api",
+    "typescript"
+  ]
 }

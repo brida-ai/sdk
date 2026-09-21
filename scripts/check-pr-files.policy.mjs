@@ -3,12 +3,12 @@ import test from 'node:test'
 
 import { checkExternalPullRequestFiles } from './check-pr-files.mjs'
 
-test('external PRs may change SDK implementation, tests, examples and ordinary docs', () => {
+test('external PRs may change SDK implementation, tests and ordinary docs', () => {
   assert.deepEqual(
     checkExternalPullRequestFiles([
       { filename: 'src/index.ts', status: 'modified' },
       { filename: 'src/index.test.ts', status: 'modified' },
-      { filename: 'examples/reflex-agent.ts', status: 'added' },
+      { filename: 'src/reflex/client.ts', status: 'modified' },
       { filename: 'README.md', status: 'modified' },
     ]),
     { checked: 4, external: true },
