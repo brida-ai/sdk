@@ -1,26 +1,16 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { checkPullRequestFiles } from './check-pr-files.mjs'
-
-test('internal maintainer PRs may change control-plane files', () => {
-  assert.deepEqual(
-    checkPullRequestFiles([
-      { filename: '.github/workflows/ci.yml', status: 'modified' },
-      { filename: 'package.json', status: 'modified' },
-    ], { external: false }),
-    { checked: 2, external: false },
-  )
-})
+import { checkExternalPullRequestFiles } from './check-pr-files.mjs'
 
 test('external PRs may change SDK implementation, tests, examples and ordinary docs', () => {
   assert.deepEqual(
-    checkPullRequestFiles([
+    checkExternalPullRequestFiles([
       { filename: 'src/index.ts', status: 'modified' },
       { filename: 'src/index.test.ts', status: 'modified' },
       { filename: 'examples/reflex-agent.ts', status: 'added' },
       { filename: 'README.md', status: 'modified' },
-    ], { external: true }),
+    ]),
     { checked: 4, external: true },
   )
 })
@@ -37,7 +27,7 @@ test('external PRs cannot alter release, workflow, dependency or governance cont
     'AGENTS.md',
   ]) {
     assert.throws(
-      () => checkPullRequestFiles([{ filename, status: 'modified' }], { external: true }),
+      () => checkExternalPullRequestFiles([{ filename, status: 'modified' }]),
       /maintainer-only control-plane/u,
     )
   }
@@ -45,11 +35,11 @@ test('external PRs cannot alter release, workflow, dependency or governance cont
 
 test('external PRs cannot bypass the boundary by renaming a protected path', () => {
   assert.throws(
-    () => checkPullRequestFiles([{
+    () => checkExternalPullRequestFiles([{
       filename: 'docs/old-security-policy.md',
       previous_filename: 'SECURITY.md',
       status: 'renamed',
-    }], { external: true }),
+    }]),
     /maintainer-only control-plane/u,
   )
 })
