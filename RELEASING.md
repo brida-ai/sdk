@@ -16,7 +16,7 @@ The bootstrap is an exact-artifact ceremony:
    test -z "$(git status --short)"
    ```
 
-2. Use the repository-pinned pnpm release and Node 24, install from the lockfile with lifecycle scripts disabled, and run the complete public gate:
+2. Use the repository-pinned pnpm release and Node 24 for the canonical release build. Public CI separately proves the supported Node 22 and Node 24 LTS lines. Install from the lockfile with lifecycle scripts disabled and run the complete public gate:
 
    ```bash
    corepack pnpm install --frozen-lockfile --ignore-scripts
