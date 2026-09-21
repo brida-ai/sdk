@@ -8,7 +8,7 @@ export type { BridaOptions, JsonValue } from './client/types.js'
 export type {
   CustomReflexFixture,
   CustomReflexVersionOptions,
-  DecisionInput,
+  ReflexDecisionInput,
   DraftCustomReflexOptions,
   ReflexDataClass,
   ReflexDeclarativePolicy,

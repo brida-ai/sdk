@@ -1,6 +1,6 @@
 import type { JsonValue } from '../client/types.js'
 
-export type DecisionInput = string | readonly JsonValue[] | { readonly [key: string]: JsonValue }
+export type ReflexDecisionInput = string | readonly JsonValue[] | { readonly [key: string]: JsonValue }
 
 export type ReflexDataClass =
   | 'legacy_unspecified'
@@ -14,18 +14,18 @@ export type ReflexVersionStatus = 'draft' | 'active' | 'retired' | (string & {})
 export type ReflexQuestion =
   | Readonly<{
       type: 'binary'
-      instructions: DecisionInput
-      criteria?: Readonly<{ true?: DecisionInput | null; false?: DecisionInput | null }>
+      instructions: ReflexDecisionInput
+      criteria?: Readonly<{ true?: ReflexDecisionInput | null; false?: ReflexDecisionInput | null }>
     }>
   | Readonly<{
       type: 'choice'
-      instructions: DecisionInput
-      criteria: Readonly<Record<string, DecisionInput | null>>
+      instructions: ReflexDecisionInput
+      criteria: Readonly<Record<string, ReflexDecisionInput | null>>
     }>
   | Readonly<{
       type: 'score'
-      instructions: DecisionInput
-      criteria: readonly (DecisionInput | null)[]
+      instructions: ReflexDecisionInput
+      criteria: readonly (ReflexDecisionInput | null)[]
     }>
 
 export type ReflexDeclarativePolicy =
