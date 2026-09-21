@@ -462,6 +462,7 @@ const BRANCH = /^[a-z][a-z0-9_]{0,63}$/u
 const FIXTURE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u
 
 function validateQuestionsInput(value: Readonly<Record<string, ReflexQuestion>>): void {
+  if (!isRecord(value)) throw new TypeError('questions must be an object')
   const entries = Object.entries(value)
   if (entries.length < 1 || entries.length > 32) throw new TypeError('questions must contain 1 to 32 entries')
   for (const [id, raw] of entries) {
@@ -716,6 +717,10 @@ function parseReflexDefinition(value: unknown): ReflexDefinition {
   if (!isRecord(value) || !Array.isArray(value.versions) || !isRecord(value.input)) {
     throw new BridaResponseError('The Brida Reflex definition response failed contract validation.')
   }
+  const maxStateBytes = requiredNonNegativeInteger(value.input.max_state_bytes, 'input.max_state_bytes')
+  if (maxStateBytes < 1 || maxStateBytes > 262_144) {
+    throw new BridaResponseError('input.max_state_bytes is outside the supported Reflex contract.')
+  }
   const versions = value.versions.map((item) => {
     if (!isRecord(item)) throw new BridaResponseError('A Brida Reflex version failed contract validation.')
     const questions = item.questions === undefined
@@ -723,10 +728,10 @@ function parseReflexDefinition(value: unknown): ReflexDefinition {
       : parseQuestions(item.questions)
     const declarativePolicy = item.declarative_policy === undefined
       ? undefined
-      : parseDeclarativePolicy(item.declarative_policy)
+      : parseDeclarativePolicy(item.declarative_policy, questions)
     const fixtures = item.fixtures === undefined
       ? undefined
-      : parseCustomFixtures(item.fixtures)
+      : parseCustomFixtures(item.fixtures, maxStateBytes, declarativePolicy)
     return Object.freeze({
       version: requiredString(item.version, 'version'),
       status: requiredString(item.status, 'status') as ReflexVersionStatus,
@@ -741,8 +746,6 @@ function parseReflexDefinition(value: unknown): ReflexDefinition {
       ...(fixtures === undefined ? {} : { fixtures }),
     })
   })
-  const maxStateBytes = requiredNonNegativeInteger(value.input.max_state_bytes, 'input.max_state_bytes')
-  if (maxStateBytes < 1) throw new BridaResponseError('input.max_state_bytes must be positive.')
   const activeVersion = value.active_version === null
     ? null
     : requiredString(value.active_version, 'active_version')
@@ -764,21 +767,42 @@ function parseReflexDefinition(value: unknown): ReflexDefinition {
 
 function parseQuestions(value: unknown): Readonly<Record<string, ReflexQuestion>> {
   if (!isRecord(value)) throw new BridaResponseError('Custom Reflex questions failed contract validation.')
-  validateJson(value, 'questions')
+  try {
+    validateQuestionsInput(value as Readonly<Record<string, ReflexQuestion>>)
+  } catch (cause) {
+    throw new BridaResponseError('Custom Reflex questions failed contract validation.', { cause })
+  }
   return Object.freeze({ ...value }) as Readonly<Record<string, ReflexQuestion>>
 }
 
-function parseDeclarativePolicy(value: unknown): ReflexDeclarativePolicy {
-  if (!isRecord(value) || !['binary', 'choice', 'score'].includes(String(value.type))) {
+function parseDeclarativePolicy(
+  value: unknown,
+  questions: Readonly<Record<string, ReflexQuestion>> | undefined,
+): ReflexDeclarativePolicy {
+  if (!isRecord(value) || questions === undefined) {
     throw new BridaResponseError('Custom Reflex declarative policy failed contract validation.')
   }
-  validateJson(value, 'declarative_policy')
+  const policy = value as unknown as ReflexDeclarativePolicy
+  try {
+    validateDeclarativePolicyInput(policy, questions)
+  } catch (cause) {
+    throw new BridaResponseError('Custom Reflex declarative policy failed contract validation.', { cause })
+  }
   return Object.freeze({ ...value }) as unknown as ReflexDeclarativePolicy
 }
 
-function parseCustomFixtures(value: unknown): readonly CustomReflexFixture[] {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 32) {
+function parseCustomFixtures(
+  value: unknown,
+  maxStateBytes: number,
+  policy: ReflexDeclarativePolicy | undefined,
+): readonly CustomReflexFixture[] {
+  if (!Array.isArray(value) || policy === undefined) {
     throw new BridaResponseError('Custom Reflex fixtures failed contract validation.')
+  }
+  try {
+    validateFixturesInput(value as readonly CustomReflexFixture[], maxStateBytes, policy)
+  } catch (cause) {
+    throw new BridaResponseError('Custom Reflex fixtures failed contract validation.', { cause })
   }
   return Object.freeze(value.map((item, index) => {
     if (!isRecord(item)) throw new BridaResponseError('A Custom Reflex fixture failed contract validation.')

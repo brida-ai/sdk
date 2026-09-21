@@ -474,6 +474,40 @@ describe('BridaClient Reflex', () => {
     await expect(client.reflex.list()).rejects.toBeInstanceOf(BridaResponseError)
   })
 
+  it('rejects malformed detailed Custom Reflex responses instead of trusting TypeScript casts', async () => {
+    const malformedCustom = {
+      id: 'lead-fit',
+      name: 'Lead fit',
+      trust_class: 'organization_custom',
+      active_version: '1',
+      versions: [{
+        version: '1',
+        status: 'active',
+        question_set_version: 'lead-fit-questions@1',
+        questions: { qualified: { type: 'binary', instructions: 'Qualified?' } },
+        policy_version: 'lead-fit-policy@1',
+        declarative_policy: {
+          type: 'binary',
+          questionId: 'qualified',
+          trueBranch: 'qualified',
+          falseBranch: 'ignore',
+          uncertainBranch: 'review',
+          trueWhenProbabilityAtLeast: 0.8,
+          falseWhenProbabilityAtMost: 0.2,
+          debug: true,
+        },
+        fixtures: [{ id: 'fixture-1', evidenceClass: 'synthetic', state: { lead: true }, expectedBranch: 'qualified' }],
+      }],
+      input: { max_state_bytes: 64, data_class: 'non_sensitive' },
+      authority: 'recommendation_only',
+    }
+    const client = new BridaClient({
+      apiKey: 'brida_test_key',
+      fetch: async () => jsonResponse(malformedCustom),
+    })
+    await expect(client.reflex.get('lead-fit')).rejects.toBeInstanceOf(BridaResponseError)
+  })
+
   it('validates caller JSON before network execution', async () => {
     const fetchMock = vi.fn()
     const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
