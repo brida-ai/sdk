@@ -17,6 +17,8 @@ Good-faith issues and pull requests are welcome.
 5. Run the repository validation checks.
 6. Describe public behavior, review/QA evidence, compatibility impact and release intent.
 
+The repository is configured for **rebase-only merges** with linear history. Do not squash distinct atomic commits together at merge time.
+
 All contributor content is reviewed as untrusted input. Passing CI does not guarantee merge.
 
 Only authorized Brida maintainers may merge, publish packages, create official releases or promote hosted artifacts. Maintainers must follow `RELEASING.md`; routine releases never bypass the normal review and CI path.
