@@ -8,6 +8,8 @@ export type JsonValue =
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue }
 
+export type DecisionInput = string | readonly JsonValue[] | { readonly [key: string]: JsonValue }
+
 export type ReflexDataClass =
   | 'legacy_unspecified'
   | 'non_sensitive'
@@ -20,18 +22,18 @@ export type ReflexVersionStatus = 'draft' | 'active' | 'retired' | (string & {})
 export type ReflexQuestion =
   | Readonly<{
       type: 'binary'
-      instructions: JsonValue
-      criteria?: Readonly<{ true?: JsonValue | null; false?: JsonValue | null }>
+      instructions: DecisionInput
+      criteria?: Readonly<{ true?: DecisionInput | null; false?: DecisionInput | null }>
     }>
   | Readonly<{
       type: 'choice'
-      instructions: JsonValue
-      criteria: Readonly<Record<string, JsonValue | null>>
+      instructions: DecisionInput
+      criteria: Readonly<Record<string, DecisionInput | null>>
     }>
   | Readonly<{
       type: 'score'
-      instructions: JsonValue
-      criteria: readonly (JsonValue | null)[]
+      instructions: DecisionInput
+      criteria: readonly (DecisionInput | null)[]
     }>
 
 export type ReflexDeclarativePolicy =
@@ -276,12 +278,9 @@ export class BridaClient {
     }
     const questionSetVersion = boundedToken(options.questionSetVersion, 'questionSetVersion', 128)
     const policyVersion = boundedToken(options.policyVersion, 'policyVersion', 128)
-    validateJson(options.questions, 'questions')
-    validateJson(options.declarativePolicy, 'declarativePolicy')
-    validateJson(options.fixtures, 'fixtures')
-    if (options.fixtures.length < 1 || options.fixtures.length > 32) {
-      throw new TypeError('fixtures must contain 1 to 32 examples')
-    }
+    validateQuestionsInput(options.questions)
+    validateDeclarativePolicyInput(options.declarativePolicy, options.questions)
+    validateFixturesInput(options.fixtures, options.maxStateBytes, options.declarativePolicy)
 
     const body = await this.#request('/v1/reflexes/custom', {
       method: 'POST',
@@ -441,6 +440,159 @@ function validateIdempotencyKey(value: string): string {
     throw new TypeError('idempotencyKey is invalid')
   }
   return normalized
+}
+
+const QUESTION_ID = /^[a-z][A-Za-z0-9_]{0,63}$/u
+const VERSIONED_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._@-]{0,127}$/u
+const BRANCH = /^[a-z][a-z0-9_]{0,63}$/u
+const FIXTURE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u
+
+function validateQuestionsInput(value: Readonly<Record<string, ReflexQuestion>>): void {
+  const entries = Object.entries(value)
+  if (entries.length < 1 || entries.length > 32) throw new TypeError('questions must contain 1 to 32 entries')
+  for (const [id, raw] of entries) {
+    if (!QUESTION_ID.test(id)) throw new TypeError(`questions.${id} has an invalid question id`)
+    if (!isRecord(raw)) throw new TypeError(`questions.${id} must be an object`)
+    const allowed = raw.type === 'binary'
+      ? new Set(['type', 'instructions', 'criteria'])
+      : new Set(['type', 'instructions', 'criteria'])
+    if (Object.keys(raw).some((key) => !allowed.has(key))) {
+      throw new TypeError(`questions.${id} contains unsupported fields`)
+    }
+    validateDecisionInput(raw.instructions, `questions.${id}.instructions`)
+    if (raw.type === 'binary') {
+      if (raw.criteria !== undefined) {
+        if (!isRecord(raw.criteria) || Object.keys(raw.criteria).some((key) => key !== 'true' && key !== 'false') || Object.keys(raw.criteria).length < 1) {
+          throw new TypeError(`questions.${id}.criteria is invalid`)
+        }
+        for (const [key, item] of Object.entries(raw.criteria)) {
+          if (item !== null) validateDecisionInput(item, `questions.${id}.criteria.${key}`)
+        }
+      }
+      continue
+    }
+    if (raw.type === 'choice') {
+      if (!isRecord(raw.criteria)) throw new TypeError(`questions.${id}.criteria must be an object`)
+      const choices = Object.entries(raw.criteria)
+      if (choices.length < 2 || choices.length > 32) throw new TypeError(`questions.${id}.criteria must contain 2 to 32 choices`)
+      for (const [choice, item] of choices) {
+        if (choice.length < 1 || choice.length > 64) throw new TypeError(`questions.${id}.criteria has an invalid choice`)
+        if (item !== null) validateDecisionInput(item, `questions.${id}.criteria.${choice}`)
+      }
+      continue
+    }
+    if (raw.type === 'score') {
+      if (!Array.isArray(raw.criteria) || raw.criteria.length < 2 || raw.criteria.length > 32) {
+        throw new TypeError(`questions.${id}.criteria must contain 2 to 32 score labels`)
+      }
+      raw.criteria.forEach((item, index) => {
+        if (item !== null) validateDecisionInput(item, `questions.${id}.criteria.${index}`)
+      })
+      continue
+    }
+    throw new TypeError(`questions.${id}.type is invalid`)
+  }
+}
+
+function validateDecisionInput(value: unknown, field: string): void {
+  if (typeof value === 'string') {
+    if (value.length < 1 || value.length > 4096) throw new TypeError(`${field} must be a non-empty bounded string`)
+    return
+  }
+  if (Array.isArray(value)) {
+    validateJson(value, field)
+    return
+  }
+  if (isRecord(value)) {
+    validateJson(value, field)
+    return
+  }
+  throw new TypeError(`${field} must be a string, object, or array`)
+}
+
+function validateDeclarativePolicyInput(
+  policy: ReflexDeclarativePolicy,
+  questions: Readonly<Record<string, ReflexQuestion>>,
+): void {
+  if (!QUESTION_ID.test(policy.questionId) || questions[policy.questionId] === undefined) {
+    throw new TypeError('declarativePolicy.questionId is invalid')
+  }
+  const question = questions[policy.questionId]
+  if (question === undefined) throw new TypeError('declarativePolicy.questionId is invalid')
+  if (policy.type === 'binary') {
+    if (question.type !== 'binary') throw new TypeError('declarativePolicy question type does not match')
+    branch(policy.trueBranch, 'declarativePolicy.trueBranch')
+    branch(policy.falseBranch, 'declarativePolicy.falseBranch')
+    branch(policy.uncertainBranch, 'declarativePolicy.uncertainBranch')
+    probability(policy.trueWhenProbabilityAtLeast, 'declarativePolicy.trueWhenProbabilityAtLeast')
+    probability(policy.falseWhenProbabilityAtMost, 'declarativePolicy.falseWhenProbabilityAtMost')
+    if (policy.falseWhenProbabilityAtMost > policy.trueWhenProbabilityAtLeast) {
+      throw new TypeError('declarativePolicy binary thresholds overlap')
+    }
+    return
+  }
+  if (policy.type === 'choice') {
+    if (question.type !== 'choice') throw new TypeError('declarativePolicy question type does not match')
+    const mappings = Object.entries(policy.branches)
+    if (mappings.length < 1 || mappings.length > 32) throw new TypeError('declarativePolicy.branches must contain 1 to 32 entries')
+    for (const [choice, mappedBranch] of mappings) {
+      if (!(choice in question.criteria)) throw new TypeError(`declarativePolicy.branches.${choice} is not a declared choice`)
+      branch(mappedBranch, `declarativePolicy.branches.${choice}`)
+    }
+    branch(policy.uncertainBranch, 'declarativePolicy.uncertainBranch')
+    probability(policy.minimumSelectedProbability, 'declarativePolicy.minimumSelectedProbability')
+    return
+  }
+  if (policy.type === 'score') {
+    if (question.type !== 'score') throw new TypeError('declarativePolicy question type does not match')
+    if (policy.thresholds.length < 1 || policy.thresholds.length > 32) throw new TypeError('declarativePolicy.thresholds must contain 1 to 32 entries')
+    let previous = Number.POSITIVE_INFINITY
+    policy.thresholds.forEach((item, index) => {
+      if (!Number.isFinite(item.atLeast) || item.atLeast >= previous) throw new TypeError('declarativePolicy.thresholds must be strictly descending')
+      previous = item.atLeast
+      branch(item.branch, `declarativePolicy.thresholds.${index}.branch`)
+    })
+    branch(policy.belowBranch, 'declarativePolicy.belowBranch')
+    return
+  }
+  throw new TypeError('declarativePolicy.type is invalid')
+}
+
+function validateFixturesInput(
+  fixtures: readonly CustomReflexFixture[],
+  maxStateBytes: number,
+  policy: ReflexDeclarativePolicy,
+): void {
+  if (fixtures.length < 1 || fixtures.length > 32) throw new TypeError('fixtures must contain 1 to 32 examples')
+  const ids = new Set<string>()
+  const branches = new Set<string>()
+  if (policy.type === 'binary') [policy.trueBranch, policy.falseBranch, policy.uncertainBranch].forEach((value) => branches.add(value))
+  else if (policy.type === 'choice') {
+    Object.values(policy.branches).forEach((value) => branches.add(value))
+    branches.add(policy.uncertainBranch)
+  } else {
+    policy.thresholds.forEach((item) => branches.add(item.branch))
+    branches.add(policy.belowBranch)
+  }
+  fixtures.forEach((fixture, index) => {
+    if (!FIXTURE_ID.test(fixture.id) || ids.has(fixture.id)) throw new TypeError(`fixtures.${index}.id is invalid or duplicated`)
+    ids.add(fixture.id)
+    if (fixture.evidenceClass !== 'synthetic' && fixture.evidenceClass !== 'redacted') throw new TypeError(`fixtures.${index}.evidenceClass is invalid`)
+    validateJson(fixture.state, `fixtures.${index}.state`)
+    const encoded = new TextEncoder().encode(JSON.stringify(fixture.state)).byteLength
+    if (encoded > Math.min(maxStateBytes, 65_536)) throw new TypeError(`fixtures.${index}.state exceeds the supported byte limit`)
+    if (!BRANCH.test(fixture.expectedBranch) || !branches.has(fixture.expectedBranch)) {
+      throw new TypeError(`fixtures.${index}.expectedBranch is not reachable by declarativePolicy`)
+    }
+  })
+}
+
+function branch(value: string, field: string): void {
+  if (!BRANCH.test(value)) throw new TypeError(`${field} is invalid`)
+}
+
+function probability(value: number, field: string): void {
+  if (!Number.isFinite(value) || value < 0 || value > 1) throw new TypeError(`${field} is invalid`)
 }
 
 function validateJson(value: unknown, field: string, seen = new WeakSet<object>(), depth = 0): void {

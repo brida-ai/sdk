@@ -249,6 +249,77 @@ describe('BridaClient Reflex', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('rejects Custom Reflex definitions that violate the public schema invariants before network execution', async () => {
+    const fetchMock = vi.fn()
+    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+
+    await expect(client.reflex.custom.draft({
+      id: 'lead-fit',
+      version: '1',
+      name: 'Lead fit',
+      maxStateBytes: 64,
+      questionSetVersion: 'lead-fit-questions@1',
+      questions: {
+        qualified: { type: 'choice', instructions: 'Choose fit', criteria: { yes: 'yes' } },
+      },
+      policyVersion: 'lead-fit-policy@1',
+      declarativePolicy: {
+        type: 'choice',
+        questionId: 'qualified',
+        branches: { yes: 'qualified' },
+        minimumSelectedProbability: 0.8,
+        uncertainBranch: 'review',
+      },
+      fixtures: [{ id: 'fixture-1', evidenceClass: 'synthetic', state: { lead: true }, expectedBranch: 'qualified' }],
+    })).rejects.toThrow(/2 to 32 choices/u)
+
+    await expect(client.reflex.custom.draft({
+      id: 'lead-fit',
+      version: '1',
+      name: 'Lead fit',
+      maxStateBytes: 64,
+      questionSetVersion: 'lead-fit-questions@1',
+      questions: {
+        qualified: { type: 'binary', instructions: 'Qualified?' },
+      },
+      policyVersion: 'lead-fit-policy@1',
+      declarativePolicy: {
+        type: 'binary',
+        questionId: 'qualified',
+        trueBranch: 'qualified',
+        falseBranch: 'ignore',
+        uncertainBranch: 'review',
+        trueWhenProbabilityAtLeast: 0.4,
+        falseWhenProbabilityAtMost: 0.6,
+      },
+      fixtures: [{ id: 'fixture-1', evidenceClass: 'synthetic', state: { lead: true }, expectedBranch: 'qualified' }],
+    })).rejects.toThrow(/thresholds overlap/u)
+
+    await expect(client.reflex.custom.draft({
+      id: 'lead-fit',
+      version: '1',
+      name: 'Lead fit',
+      maxStateBytes: 64,
+      questionSetVersion: 'lead-fit-questions@1',
+      questions: {
+        qualified: { type: 'binary', instructions: 'Qualified?' },
+      },
+      policyVersion: 'lead-fit-policy@1',
+      declarativePolicy: {
+        type: 'binary',
+        questionId: 'qualified',
+        trueBranch: 'qualified',
+        falseBranch: 'ignore',
+        uncertainBranch: 'review',
+        trueWhenProbabilityAtLeast: 0.8,
+        falseWhenProbabilityAtMost: 0.2,
+      },
+      fixtures: [{ id: 'fixture-1', evidenceClass: 'synthetic', state: { lead: true }, expectedBranch: 'impossible' }],
+    })).rejects.toThrow(/not reachable/u)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('maps the public run contract and preserves caller idempotency exactly', async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe('https://preview.brida.test/v1/reflexes/agent-wakeup/runs')
