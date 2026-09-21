@@ -69,13 +69,21 @@ The bootstrap is an exact-artifact ceremony:
 
 The repository protects `v*` tags from updates/deletion and has GitHub Immutable Releases enabled. Never create the initial tag before npm verification succeeds.
 
-After the package exists, configure npm Trusted Publishing for:
+After the package exists, bind npm Trusted Publishing to the exact GitHub workflow and the protected `npm-publish` Environment. The npm CLI requires only the workflow filename, not its full path:
 
-- organization: `brida-ai`;
-- repository: `sdk`;
-- workflow: `.github/workflows/finalize-release.yml`.
+```bash
+npm trust github @brida/sdk \
+  --file finalize-release.yml \
+  --repo brida-ai/sdk \
+  --env npm-publish \
+  --allow-publish
+```
 
-That npm Trusted Publisher binding is the only browser-side bootstrap step. Do not add an npm automation token as a substitute. Do not use the automated release controller until the initial package, exact tag/GitHub Release and Trusted Publisher binding are all complete.
+The first trust mutation requires npm 2FA and the package must already exist. Keep direct `npm publish` permission explicit; new trusted-publisher configurations otherwise default to staged publishing only. The GitHub Environment accepts deployments only from protected branches, so the OIDC subject is additionally bound to the protected release context.
+
+After a successful OIDC release has been proven, set npm package **Publishing access** to require two-factor authentication and disallow traditional tokens, then remove any obsolete publish tokens. Trusted Publishing continues to work because it uses short-lived OIDC credentials rather than npm automation tokens.
+
+Do not use the automated release controller until the initial package, exact tag/GitHub Release and Trusted Publisher binding are all complete.
 
 ## Normal release
 
@@ -94,6 +102,6 @@ That npm Trusted Publisher binding is the only browser-side bootstrap step. Do n
 - Never use a long-lived npm token in GitHub Actions. The npm OIDC job must not have repository write authority and must not execute repository dependency scripts.
 - The package version, release branch, tag, npm package and GitHub Release must identify the same version.
 - A release retry must be idempotent: an existing tag is accepted only when it already names the exact reviewed release commit.
-- The npm Trusted Publisher is bound to the exact finalizer workflow that performs publication; publication does not depend on a second workflow being triggered by a `GITHUB_TOKEN`-created event.
+- The npm Trusted Publisher is bound to `finalize-release.yml` and the protected `npm-publish` Environment; publication does not depend on a second workflow being triggered by a `GITHUB_TOKEN`-created event.
 
 A genuine P0 security hotfix may use the owner-only emergency path defined by repository governance, but it still requires exact-SHA QA evidence and a follow-up review.
