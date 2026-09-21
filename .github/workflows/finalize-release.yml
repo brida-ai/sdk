@@ -58,17 +58,20 @@ jobs:
       - name: Verify release identity, bootstrap and target version
         id: identity
         shell: bash
+        env:
+          MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          RELEASE_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           SOURCE_SHA="$(git rev-parse HEAD)"
-          if [ "$SOURCE_SHA" != "${{ github.event.pull_request.merge_commit_sha }}" ]; then
+          if [ "$SOURCE_SHA" != "$MERGE_COMMIT_SHA" ]; then
             echo "Checkout is not the reviewed merge commit." >&2
             exit 1
           fi
           VERSION="$(node -p "require('./package.json').version")"
           TAG="v$VERSION"
           EXPECTED_BRANCH="release/$TAG"
-          if [ "${{ github.event.pull_request.head.ref }}" != "$EXPECTED_BRANCH" ]; then
+          if [ "$RELEASE_HEAD_REF" != "$EXPECTED_BRANCH" ]; then
             echo "Release branch must be $EXPECTED_BRANCH" >&2
             exit 1
           fi
@@ -116,36 +119,56 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.verify.outputs.tag }}
+      SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
     steps:
-      - name: Checkout exact verified source for tag creation
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.verify.outputs.source_sha }}
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Create or verify immutable tag
+      - name: Create or verify immutable annotated tag without source checkout
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ needs.verify.outputs.tag }}"
-          SHA="$(git rev-parse HEAD)"
-          if [ "$SHA" != "${{ needs.verify.outputs.source_sha }}" ]; then
-            echo "Tag job source identity mismatch." >&2
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $TAG" >&2
             exit 1
           fi
-          if git rev-parse "$TAG^{commit}" >/dev/null 2>&1; then
-            TAG_SHA="$(git rev-parse "$TAG^{commit}")"
-            if [ "$TAG_SHA" != "$SHA" ]; then
-              echo "Refusing mismatched existing tag $TAG at $TAG_SHA" >&2
+          if ! [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid source SHA." >&2
+            exit 1
+          fi
+
+          COMMIT_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA" --jq '.sha')"
+          if [ "$COMMIT_SHA" != "$SOURCE_SHA" ]; then
+            echo "Release source commit identity mismatch." >&2
+            exit 1
+          fi
+
+          if REF_JSON="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" 2>/dev/null)"; then
+            OBJECT_TYPE="$(printf '%s' "$REF_JSON" | jq -r '.object.type')"
+            OBJECT_SHA="$(printf '%s' "$REF_JSON" | jq -r '.object.sha')"
+            if [ "$OBJECT_TYPE" != "tag" ]; then
+              echo "Existing $TAG is not an annotated tag." >&2
               exit 1
             fi
-          else
-            git config user.name "brida-release"
-            git config user.email "release@brida.ai"
-            git tag -a "$TAG" -m "$TAG"
-            git push origin "refs/tags/$TAG"
+            TAG_JSON="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$OBJECT_SHA")"
+            TAGGED_TYPE="$(printf '%s' "$TAG_JSON" | jq -r '.object.type')"
+            TAGGED_SHA="$(printf '%s' "$TAG_JSON" | jq -r '.object.sha')"
+            if [ "$TAGGED_TYPE" != "commit" ] || [ "$TAGGED_SHA" != "$SOURCE_SHA" ]; then
+              echo "Refusing mismatched existing tag $TAG." >&2
+              exit 1
+            fi
+            exit 0
           fi
+
+          TAG_OBJECT_SHA="$(gh api -X POST "repos/$GITHUB_REPOSITORY/git/tags" \
+            -f tag="$TAG" \
+            -f message="$TAG" \
+            -f object="$SOURCE_SHA" \
+            -f type=commit \
+            --jq '.sha')"
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$TAG" \
+            -f sha="$TAG_OBJECT_SHA" >/dev/null
 
   publish:
     name: Publish verified tarball through npm OIDC
