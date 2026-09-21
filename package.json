@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Official TypeScript SDK for the Brida platform",
   "type": "module",
+  "types": "./dist/index.d.ts",
   "license": "Apache-2.0",
   "sideEffects": false,
   "packageManager": "pnpm@11.21.0",
