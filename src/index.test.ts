@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   BRIDA_API_URL,
   BridaApiError,
-  BridaClient,
+  Brida,
   BridaNetworkError,
   BridaResponseError,
   createIdempotencyKey,
@@ -82,7 +82,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-describe('BridaClient Reflex', () => {
+describe('Brida Reflex namespace', () => {
   it('uses the canonical API URL by default and sends only the Brida API credential', async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe(`${BRIDA_API_URL}/v1/reflexes`)
@@ -91,18 +91,18 @@ describe('BridaClient Reflex', () => {
       expect(init?.redirect).toBe('error')
       return jsonResponse({ object: 'list', data: [definition] })
     })
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     await expect(client.reflex.list()).resolves.toEqual({ object: 'list', data: [definition] })
   })
 
   it('requires HTTPS for credential-bearing remote API endpoints while allowing loopback HTTP', async () => {
-    expect(() => new BridaClient({
+    expect(() => new Brida({
       apiKey: 'brida_test_key',
       baseUrl: 'http://api.example.test',
     })).toThrow(/HTTPS/u)
 
     const fetchMock = vi.fn(async () => jsonResponse({ object: 'list', data: [] }))
-    const local = new BridaClient({
+    const local = new Brida({
       apiKey: 'brida_test_key',
       baseUrl: 'http://127.0.0.1:8787',
       fetch: fetchMock,
@@ -118,7 +118,7 @@ describe('BridaClient Reflex', () => {
         ? jsonResponse({ object: 'list', data: [definition] })
         : jsonResponse(definition)
     })
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     const listed = await client.reflex.list()
     const detail = await client.reflex.get('agent-wakeup')
     expect(listed.data[0]?.input.data_class).toBe('non_sensitive')
@@ -162,7 +162,7 @@ describe('BridaClient Reflex', () => {
         versions: [{ ...customDefinition.versions[0], status: 'draft' }],
       }, 201)
     })
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     const drafted = await client.reflex.custom.draft({
       id: 'lead-fit',
       version: '1',
@@ -208,7 +208,7 @@ describe('BridaClient Reflex', () => {
       requests.push(`${init?.method} ${new URL(String(url)).pathname}`)
       return jsonResponse(customDefinition)
     })
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     await expect(client.reflex.custom.activate('lead-fit', '1')).resolves.toMatchObject({
       id: 'lead-fit',
       trust_class: 'organization_custom',
@@ -226,7 +226,7 @@ describe('BridaClient Reflex', () => {
 
   it('rejects malformed Custom Reflex authoring inputs before network execution', async () => {
     const fetchMock = vi.fn()
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     await expect(client.reflex.custom.draft({
       id: 'Bad Id',
       version: '1',
@@ -251,7 +251,7 @@ describe('BridaClient Reflex', () => {
 
   it('rejects Custom Reflex definitions that violate the public schema invariants before network execution', async () => {
     const fetchMock = vi.fn()
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
 
     await expect(client.reflex.custom.draft({
       id: 'lead-fit',
@@ -384,7 +384,7 @@ describe('BridaClient Reflex', () => {
 
   it('rejects invalid Reflex identifiers, versions and client refs before network execution', async () => {
     const fetchMock = vi.fn()
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
 
     await expect(client.reflex.get('Bad Id')).rejects.toThrow(/reflexId is invalid/u)
     await expect(client.reflex.run('Bad Id', { state: { synthetic: true } })).rejects.toThrow(/reflexId is invalid/u)
@@ -412,7 +412,7 @@ describe('BridaClient Reflex', () => {
       })
       return jsonResponse(run)
     })
-    const client = new BridaClient({
+    const client = new Brida({
       apiKey: 'brida_test_key',
       baseUrl: 'https://preview.brida.test/',
       fetch: fetchMock,
@@ -434,7 +434,7 @@ describe('BridaClient Reflex', () => {
       },
       trace_id: 'trace_api_error',
     }, 503))
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
 
     const error = await client.reflex.run('agent-wakeup', {
       idempotencyKey: 'logical-run-retry',
@@ -452,7 +452,7 @@ describe('BridaClient Reflex', () => {
   })
 
   it('preserves HTTP status and idempotency semantics for malformed JSON error envelopes', async () => {
-    const client = new BridaClient({
+    const client = new Brida({
       apiKey: 'brida_test_key',
       fetch: async () => jsonResponse({ error: {}, trace_id: 'trace_bad_error' }, 503),
     })
@@ -476,7 +476,7 @@ describe('BridaClient Reflex', () => {
     const controller = new AbortController()
     controller.abort(new Error('synthetic caller cancellation'))
     const fetchMock = vi.fn()
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     const error = await client.reflex.run('agent-wakeup', {
       state: { synthetic: true },
       idempotencyKey: 'logical-run-cancelled',
@@ -495,7 +495,7 @@ describe('BridaClient Reflex', () => {
       observedKey = new Headers(init?.headers).get('idempotency-key')
       throw new Error('synthetic connection loss')
     })
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     const error = await client.reflex.run('agent-wakeup', { state: { synthetic: true } })
       .catch((value: unknown) => value)
     expect(error).toBeInstanceOf(BridaNetworkError)
@@ -505,7 +505,7 @@ describe('BridaClient Reflex', () => {
   })
 
   it('rejects malformed response shapes instead of casting them blindly', async () => {
-    const client = new BridaClient({
+    const client = new Brida({
       apiKey: 'brida_test_key',
       fetch: async () => jsonResponse({ object: 'list', data: [{ id: 'missing-contract-fields' }] }),
     })
@@ -539,7 +539,7 @@ describe('BridaClient Reflex', () => {
       input: { max_state_bytes: 64, data_class: 'non_sensitive' },
       authority: 'recommendation_only',
     }
-    const client = new BridaClient({
+    const client = new Brida({
       apiKey: 'brida_test_key',
       fetch: async () => jsonResponse(malformedCustom),
     })
@@ -548,7 +548,7 @@ describe('BridaClient Reflex', () => {
 
   it('validates caller JSON before network execution', async () => {
     const fetchMock = vi.fn()
-    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const client = new Brida({ apiKey: 'brida_test_key', fetch: fetchMock })
     await expect(client.reflex.run('agent-wakeup', {
       state: { score: Number.NaN },
     })).rejects.toThrow(/non-finite/u)

@@ -1,9 +1,9 @@
-import { BridaClient } from '../src/index.js'
+import { Brida } from '../src/index.js'
 
 const apiKey = process.env.BRIDA_API_KEY
 if (apiKey === undefined) throw new Error('BRIDA_API_KEY is required')
 
-const brida = new BridaClient({ apiKey })
+const brida = new Brida({ apiKey })
 
 await brida.reflex.custom.draft({
   id: 'lead-fit',
