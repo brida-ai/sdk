@@ -12,6 +12,7 @@ If private vulnerability reporting is unavailable to you, contact Brida maintain
 - do not publish exploit details before coordinated remediation;
 - fork PR workflows must not receive production or publishing secrets;
 - generated artifacts must not contain local/private paths or source maps with internal data.
+- pull requests and `main` are scanned with GitHub CodeQL; do not bypass a failing code-scanning gate.
 
 Brida may temporarily restrict discussion or publication while a vulnerability is investigated.
 
