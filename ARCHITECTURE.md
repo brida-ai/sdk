@@ -65,6 +65,15 @@ Product namespace code may depend on the shared client substrate. Shared client 
 8. A new product namespace must be additive unless a semver-major change is explicitly justified.
 9. Public contract generation may later consume an allowlisted OpenAPI/JSON-Schema projection; private implementation trees are never mirrored into this repository.
 
+## TypeScript naming and wire contracts
+
+The SDK has two naming layers on purpose:
+
+- SDK-owned options and helpers use idiomatic TypeScript camelCase (for example `maxStateBytes`, `idempotencyKey` and `traceId` on SDK error objects).
+- Response fields that are part of a released Brida HTTP payload preserve their public wire names unless a product namespace explicitly defines a higher-level abstraction. This keeps SDK receipts/results directly comparable with REST responses and avoids duplicating a second drifting response schema inside the client.
+
+Do not rename wire response fields merely for style. If a future product wants a more idiomatic domain object, expose that as an intentional typed abstraction with its own contract and tests rather than silently changing the transport projection.
+
 ## Repository boundary
 
 This repository owns:
