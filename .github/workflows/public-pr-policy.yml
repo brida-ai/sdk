@@ -43,13 +43,8 @@ jobs:
             fs.writeFileSync('.pr-body.md', context.payload.pull_request.body || '')
 
       - name: Protect maintainer-only control plane from external forks
-        shell: bash
-        run: |
-          args=(.pr-files.json)
-          if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
-            args+=(--external)
-          fi
-          node scripts/check-pr-files.mjs "${args[@]}"
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: node scripts/check-pr-files.mjs
 
       - name: Enforce release and QA metadata
-        run: node scripts/check-pr-metadata.mjs .pr-body.md
+        run: node scripts/check-pr-metadata.mjs

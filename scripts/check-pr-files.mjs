@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+const PR_FILES_FILE = '.pr-files.json'
 const MAINTAINER_ONLY = [
   /^\.github(?:\/|$)/u,
   /^scripts(?:\/|$)/u,
@@ -11,9 +12,7 @@ const MAINTAINER_ONLY = [
   /^(?:AGENTS\.md|GUIDELINES\.md|SECURITY\.md|RELEASING\.md|CONTRIBUTING\.md|LICENSE)$/u,
 ]
 
-export function checkPullRequestFiles(files, { external }) {
-  if (!external) return Object.freeze({ checked: files.length, external: false })
-
+export function checkExternalPullRequestFiles(files) {
   for (const file of files) {
     const candidates = [file.filename, file.previous_filename].filter((value) => typeof value === 'string')
     for (const path of candidates) {
@@ -22,14 +21,15 @@ export function checkPullRequestFiles(files, { external }) {
       }
     }
   }
-
   return Object.freeze({ checked: files.length, external: true })
 }
 
+async function runExternalPolicyCheck() {
+  const files = JSON.parse(await readFile(PR_FILES_FILE, 'utf8'))
+  const result = checkExternalPullRequestFiles(files)
+  console.log(`public PR path policy: ${result.checked} files / external / ok`)
+}
+
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const path = process.argv[2]
-  if (path === undefined) throw new Error('usage: check-pr-files.mjs <files.json> [--external]')
-  const files = JSON.parse(await readFile(path, 'utf8'))
-  const result = checkPullRequestFiles(files, { external: process.argv.includes('--external') })
-  console.log(`public PR path policy: ${result.checked} files / ${result.external ? 'external' : 'internal'} / ok`)
+  await runExternalPolicyCheck()
 }
