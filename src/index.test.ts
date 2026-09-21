@@ -317,6 +317,48 @@ describe('BridaClient Reflex', () => {
       fixtures: [{ id: 'fixture-1', evidenceClass: 'synthetic', state: { lead: true }, expectedBranch: 'impossible' }],
     })).rejects.toThrow(/not reachable/u)
 
+    const policyWithExtraField = {
+      type: 'binary',
+      questionId: 'qualified',
+      trueBranch: 'qualified',
+      falseBranch: 'ignore',
+      uncertainBranch: 'review',
+      trueWhenProbabilityAtLeast: 0.8,
+      falseWhenProbabilityAtMost: 0.2,
+      debug: true,
+    } as const
+    await expect(client.reflex.custom.draft({
+      id: 'lead-fit',
+      version: '1',
+      name: 'Lead fit',
+      maxStateBytes: 64,
+      questionSetVersion: 'lead-fit-questions@1',
+      questions: { qualified: { type: 'binary', instructions: 'Qualified?' } },
+      policyVersion: 'lead-fit-policy@1',
+      declarativePolicy: policyWithExtraField,
+      fixtures: [{ id: 'fixture-1', evidenceClass: 'synthetic', state: { lead: true }, expectedBranch: 'qualified' }],
+    })).rejects.toThrow(/unsupported fields/u)
+
+    await expect(client.reflex.custom.draft({
+      id: 'lead-fit',
+      version: '1',
+      name: 'Lead fit',
+      maxStateBytes: 64,
+      questionSetVersion: 'lead-fit-questions@1',
+      questions: { qualified: { type: 'binary', instructions: '   ' } },
+      policyVersion: 'lead-fit-policy@1',
+      declarativePolicy: {
+        type: 'binary',
+        questionId: 'qualified',
+        trueBranch: 'qualified',
+        falseBranch: 'ignore',
+        uncertainBranch: 'review',
+        trueWhenProbabilityAtLeast: 0.8,
+        falseWhenProbabilityAtMost: 0.2,
+      },
+      fixtures: [{ id: 'fixture-1', evidenceClass: 'synthetic', state: { lead: true }, expectedBranch: 'qualified' }],
+    })).rejects.toThrow(/non-empty bounded string/u)
+
     await expect(client.reflex.custom.draft({
       id: 'lead-fit',
       version: '1',

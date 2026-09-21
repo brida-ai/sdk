@@ -502,7 +502,7 @@ function validateQuestionsInput(value: Readonly<Record<string, ReflexQuestion>>)
 
 function validateDecisionInput(value: unknown, field: string): void {
   if (typeof value === 'string') {
-    if (value.length < 1 || value.length > 4096) throw new TypeError(`${field} must be a non-empty bounded string`)
+    if (value.trim().length < 1 || value.length > 4096) throw new TypeError(`${field} must be a non-empty bounded string`)
     return
   }
   if (Array.isArray(value)) {
@@ -520,7 +520,19 @@ function validateDeclarativePolicyInput(
   policy: ReflexDeclarativePolicy,
   questions: Readonly<Record<string, ReflexQuestion>>,
 ): void {
-  if (!QUESTION_ID.test(policy.questionId) || questions[policy.questionId] === undefined) {
+  if (!isRecord(policy)) throw new TypeError('declarativePolicy must be an object')
+  const allowed = policy.type === 'binary'
+    ? new Set(['type', 'questionId', 'trueBranch', 'falseBranch', 'uncertainBranch', 'trueWhenProbabilityAtLeast', 'falseWhenProbabilityAtMost'])
+    : policy.type === 'choice'
+      ? new Set(['type', 'questionId', 'branches', 'minimumSelectedProbability', 'uncertainBranch'])
+      : policy.type === 'score'
+        ? new Set(['type', 'questionId', 'thresholds', 'belowBranch'])
+        : undefined
+  if (allowed === undefined) throw new TypeError('declarativePolicy.type is invalid')
+  if (Object.keys(policy).some((key) => !allowed.has(key))) {
+    throw new TypeError('declarativePolicy contains unsupported fields')
+  }
+  if (typeof policy.questionId !== 'string' || !QUESTION_ID.test(policy.questionId) || questions[policy.questionId] === undefined) {
     throw new TypeError('declarativePolicy.questionId is invalid')
   }
   const question = questions[policy.questionId]
@@ -539,10 +551,11 @@ function validateDeclarativePolicyInput(
   }
   if (policy.type === 'choice') {
     if (question.type !== 'choice') throw new TypeError('declarativePolicy question type does not match')
+    if (!isRecord(policy.branches)) throw new TypeError('declarativePolicy.branches must be an object')
     const mappings = Object.entries(policy.branches)
     if (mappings.length < 1 || mappings.length > 32) throw new TypeError('declarativePolicy.branches must contain 1 to 32 entries')
     for (const [choice, mappedBranch] of mappings) {
-      if (!(choice in question.criteria)) throw new TypeError(`declarativePolicy.branches.${choice} is not a declared choice`)
+      if (!Object.hasOwn(question.criteria, choice)) throw new TypeError(`declarativePolicy.branches.${choice} is not a declared choice`)
       branch(mappedBranch, `declarativePolicy.branches.${choice}`)
     }
     branch(policy.uncertainBranch, 'declarativePolicy.uncertainBranch')
@@ -551,12 +564,22 @@ function validateDeclarativePolicyInput(
   }
   if (policy.type === 'score') {
     if (question.type !== 'score') throw new TypeError('declarativePolicy question type does not match')
-    if (policy.thresholds.length < 1 || policy.thresholds.length > 32) throw new TypeError('declarativePolicy.thresholds must contain 1 to 32 entries')
+    if (!Array.isArray(policy.thresholds) || policy.thresholds.length < 1 || policy.thresholds.length > 32) {
+      throw new TypeError('declarativePolicy.thresholds must contain 1 to 32 entries')
+    }
     let previous = Number.POSITIVE_INFINITY
     policy.thresholds.forEach((item, index) => {
-      if (!Number.isFinite(item.atLeast) || item.atLeast >= previous) throw new TypeError('declarativePolicy.thresholds must be strictly descending')
-      previous = item.atLeast
-      branch(item.branch, `declarativePolicy.thresholds.${index}.branch`)
+      if (!isRecord(item) || Object.keys(item).some((key) => key !== 'atLeast' && key !== 'branch')) {
+        throw new TypeError(`declarativePolicy.thresholds.${index} is invalid`)
+      }
+      const atLeast = item.atLeast
+      const mappedBranch = item.branch
+      if (typeof atLeast !== 'number' || !Number.isFinite(atLeast) || atLeast >= previous) {
+        throw new TypeError('declarativePolicy.thresholds must be strictly descending')
+      }
+      previous = atLeast
+      if (typeof mappedBranch !== 'string') throw new TypeError(`declarativePolicy.thresholds.${index}.branch is invalid`)
+      branch(mappedBranch, `declarativePolicy.thresholds.${index}.branch`)
     })
     branch(policy.belowBranch, 'declarativePolicy.belowBranch')
     return
@@ -569,7 +592,7 @@ function validateFixturesInput(
   maxStateBytes: number,
   policy: ReflexDeclarativePolicy,
 ): void {
-  if (fixtures.length < 1 || fixtures.length > 32) throw new TypeError('fixtures must contain 1 to 32 examples')
+  if (!Array.isArray(fixtures) || fixtures.length < 1 || fixtures.length > 32) throw new TypeError('fixtures must contain 1 to 32 examples')
   const ids = new Set<string>()
   const branches = new Set<string>()
   if (policy.type === 'binary') [policy.trueBranch, policy.falseBranch, policy.uncertainBranch].forEach((value) => branches.add(value))
@@ -581,20 +604,25 @@ function validateFixturesInput(
     branches.add(policy.belowBranch)
   }
   fixtures.forEach((fixture, index) => {
-    if (!FIXTURE_ID.test(fixture.id) || ids.has(fixture.id)) throw new TypeError(`fixtures.${index}.id is invalid or duplicated`)
+    if (!isRecord(fixture) || Object.keys(fixture).some((key) => !['id', 'evidenceClass', 'state', 'expectedBranch'].includes(key))) {
+      throw new TypeError(`fixtures.${index} is invalid`)
+    }
+    if (typeof fixture.id !== 'string' || !FIXTURE_ID.test(fixture.id) || ids.has(fixture.id)) {
+      throw new TypeError(`fixtures.${index}.id is invalid or duplicated`)
+    }
     ids.add(fixture.id)
     if (fixture.evidenceClass !== 'synthetic' && fixture.evidenceClass !== 'redacted') throw new TypeError(`fixtures.${index}.evidenceClass is invalid`)
     validateJson(fixture.state, `fixtures.${index}.state`)
     const encoded = new TextEncoder().encode(JSON.stringify(fixture.state)).byteLength
     if (encoded > Math.min(maxStateBytes, 65_536)) throw new TypeError(`fixtures.${index}.state exceeds the supported byte limit`)
-    if (!BRANCH.test(fixture.expectedBranch) || !branches.has(fixture.expectedBranch)) {
+    if (typeof fixture.expectedBranch !== 'string' || !BRANCH.test(fixture.expectedBranch) || !branches.has(fixture.expectedBranch)) {
       throw new TypeError(`fixtures.${index}.expectedBranch is not reachable by declarativePolicy`)
     }
   })
 }
 
 function branch(value: string, field: string): void {
-  if (!BRANCH.test(value)) throw new TypeError(`${field} is invalid`)
+  if (typeof value !== 'string' || !BRANCH.test(value)) throw new TypeError(`${field} is invalid`)
 }
 
 function probability(value: number, field: string): void {
