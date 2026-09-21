@@ -24,12 +24,32 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
 
-      - name: Materialize pull-request body without checking out contributor code
+      - name: Materialize pull-request metadata without checking out contributor code
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('node:fs')
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            })
+            fs.writeFileSync('.pr-files.json', JSON.stringify(files.map(({ filename, previous_filename, status }) => ({
+              filename,
+              previous_filename,
+              status,
+            }))))
             fs.writeFileSync('.pr-body.md', context.payload.pull_request.body || '')
+
+      - name: Protect maintainer-only control plane from external forks
+        shell: bash
+        run: |
+          args=(.pr-files.json)
+          if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+            args+=(--external)
+          fi
+          node scripts/check-pr-files.mjs "${args[@]}"
 
       - name: Enforce release and QA metadata
         run: node scripts/check-pr-metadata.mjs .pr-body.md
