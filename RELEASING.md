@@ -17,18 +17,18 @@ Create the initial immutable `v0.1.0` Git tag on the exact source commit used fo
 ## Normal release
 
 1. Run **Prepare SDK release** and choose `patch`, `minor`, or `major`.
-2. The controller computes the next version from the highest stable Git tag and pushes `release/vX.Y.Z`.
+2. A read-only planning job computes the next version from the highest stable Git tag, verifies release arithmetic, and uploads only the prepared `package.json`. A separate `contents: write` job receives no dependency-install/test execution authority and pushes `release/vX.Y.Z` from the exact verified `main` SHA.
 3. A maintainer opens a normal pull request from that branch to `main`. This human PR creation is deliberate: GitHub suppresses recursive workflow events generated with `GITHUB_TOKEN`, so the controller does not create a PR that could miss normal `pull_request` CI.
 4. Review that release PR normally. Required public CI, public-surface checks, CODEOWNERS review, and conversation resolution still apply.
 5. Merge only after the review and QA evidence is complete.
-6. **Finalize SDK release** checks out the exact reviewed merge commit, reruns `pnpm check` and `npm pack --dry-run`, verifies the release identity, creates or verifies the immutable tag, publishes through npm Trusted Publishing/OIDC with provenance, verifies npm visibility, and finally creates the GitHub Release.
+6. **Finalize SDK release** uses privilege-separated jobs: a read-only verifier checks the exact reviewed merge commit and builds one tarball; a `contents: write` tag job creates/verifies the immutable source tag without running dependencies; a dedicated `contents: read` + `id-token: write` job verifies the tarball SHA-256 and publishes only that artifact through npm Trusted Publishing/OIDC with provenance; a final `contents: write` job creates the GitHub Release after npm visibility is confirmed.
 
 ## Invariants
 
 - Never move a release tag.
 - Never publish from a feature branch or pull-request head.
 - Never bypass public CI/review to prepare a routine release.
-- Never use a long-lived npm token in GitHub Actions.
+- Never use a long-lived npm token in GitHub Actions. The npm OIDC job must not have repository write authority and must not execute repository dependency scripts.
 - The package version, release branch, tag, npm package and GitHub Release must identify the same version.
 - A release retry must be idempotent: an existing tag is accepted only when it already names the exact reviewed release commit.
 - The npm Trusted Publisher is bound to the exact finalizer workflow that performs publication; publication does not depend on a second workflow being triggered by a `GITHUB_TOKEN`-created event.

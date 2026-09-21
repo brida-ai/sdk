@@ -9,25 +9,28 @@ on:
         type: choice
         options: [patch, minor, major]
 
-permissions:
-  contents: write
-
 concurrency:
   group: sdk-release-preparation
   cancel-in-progress: false
 
 jobs:
-  prepare:
-    name: Prepare protected release branch
+  plan:
+    name: Verify and plan release
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
-      - name: Checkout trusted main with release history
+      - name: Checkout trusted main without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -52,29 +55,62 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
           node scripts/release/prepare.mjs --impact "${{ inputs.impact }}" --apply | tee /tmp/release-plan.json
           VERSION="$(node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('/tmp/release-plan.json','utf8').trim());process.stdout.write(x.version)")"
           TAG="v$VERSION"
+          CHANGED="$(git status --short)"
+          test "$CHANGED" = " M package.json"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Refuse unexpected release mutations
-        shell: bash
-        run: |
-          set -euo pipefail
-          changed="$(git status --short)"
-          test "$changed" = " M package.json"
+      - name: Upload exact prepared manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sdk-release-manifest-${{ steps.plan.outputs.source_sha }}
+          path: package.json
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Push release branch
+  branch:
+    name: Create protected release branch
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout exact verified main SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Download prepared manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sdk-release-manifest-${{ needs.plan.outputs.source_sha }}
+          path: /tmp/sdk-release-manifest
+
+      - name: Create and push release branch
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ steps.plan.outputs.tag }}"
+          if [ "$(git rev-parse HEAD)" != "${{ needs.plan.outputs.source_sha }}" ]; then
+            echo "Release branch source identity mismatch." >&2
+            exit 1
+          fi
+          TAG="${{ needs.plan.outputs.tag }}"
           BRANCH="release/$TAG"
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
             echo "Release branch already exists: $BRANCH" >&2
             exit 1
           fi
+          cp /tmp/sdk-release-manifest/package.json package.json
+          test "$(node -p "require('./package.json').version")" = "${{ needs.plan.outputs.version }}"
+          test "$(git status --short)" = " M package.json"
           git config user.name "brida-release"
           git config user.email "release@brida.ai"
           git switch -c "$BRANCH"
@@ -86,13 +122,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ steps.plan.outputs.tag }}"
+          TAG="${{ needs.plan.outputs.tag }}"
           BRANCH="release/$TAG"
           {
             echo "## Release branch prepared"
             echo
-            echo "Branch `$BRANCH` was pushed."
+            echo "Branch \`$BRANCH\` was pushed from verified main SHA \`${{ needs.plan.outputs.source_sha }}\`."
             echo
-            echo "Open a normal pull request from `$BRANCH` to `main` and use the repository PR template."
-            echo "The PR must be created by a human/maintainer so normal `pull_request` CI is triggered; this workflow deliberately does not create the PR with `GITHUB_TOKEN`."
+            echo "Open a normal pull request from \`$BRANCH\` to \`main\` and use the repository PR template."
+            echo "The PR must be created by a human/maintainer so normal \`pull_request\` CI is triggered; this workflow deliberately does not create the PR with \`GITHUB_TOKEN\`."
           } >> "$GITHUB_STEP_SUMMARY"
