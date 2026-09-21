@@ -70,14 +70,14 @@ export function validateQuestionsInput(value: Readonly<Record<string, ReflexQues
     if (Object.keys(raw).some((key) => !allowed.has(key))) {
       throw new TypeError(`questions.${id} contains unsupported fields`)
     }
-    validateDecisionInput(raw.instructions, `questions.${id}.instructions`)
+    validateReflexDecisionInput(raw.instructions, `questions.${id}.instructions`)
     if (raw.type === 'binary') {
       if (raw.criteria !== undefined) {
         if (!isRecord(raw.criteria) || Object.keys(raw.criteria).some((key) => key !== 'true' && key !== 'false') || Object.keys(raw.criteria).length < 1) {
           throw new TypeError(`questions.${id}.criteria is invalid`)
         }
         for (const [key, item] of Object.entries(raw.criteria)) {
-          if (item !== null) validateDecisionInput(item, `questions.${id}.criteria.${key}`)
+          if (item !== null) validateReflexDecisionInput(item, `questions.${id}.criteria.${key}`)
         }
       }
       continue
@@ -88,7 +88,7 @@ export function validateQuestionsInput(value: Readonly<Record<string, ReflexQues
       if (choices.length < 2 || choices.length > 32) throw new TypeError(`questions.${id}.criteria must contain 2 to 32 choices`)
       for (const [choice, item] of choices) {
         if (choice.length < 1 || choice.length > 64) throw new TypeError(`questions.${id}.criteria has an invalid choice`)
-        if (item !== null) validateDecisionInput(item, `questions.${id}.criteria.${choice}`)
+        if (item !== null) validateReflexDecisionInput(item, `questions.${id}.criteria.${choice}`)
       }
       continue
     }
@@ -97,7 +97,7 @@ export function validateQuestionsInput(value: Readonly<Record<string, ReflexQues
         throw new TypeError(`questions.${id}.criteria must contain 2 to 32 score labels`)
       }
       raw.criteria.forEach((item, index) => {
-        if (item !== null) validateDecisionInput(item, `questions.${id}.criteria.${index}`)
+        if (item !== null) validateReflexDecisionInput(item, `questions.${id}.criteria.${index}`)
       })
       continue
     }
@@ -105,7 +105,7 @@ export function validateQuestionsInput(value: Readonly<Record<string, ReflexQues
   }
 }
 
-function validateDecisionInput(value: unknown, field: string): void {
+function validateReflexDecisionInput(value: unknown, field: string): void {
   if (typeof value === 'string') {
     if (value.trim().length < 1 || value.length > 4096) throw new TypeError(`${field} must be a non-empty bounded string`)
     return
