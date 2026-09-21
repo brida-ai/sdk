@@ -7,7 +7,7 @@ import {
   BridaNetworkError,
   BridaResponseError,
   createIdempotencyKey,
-} from './index.js'
+} from '../index.js'
 
 const definition = {
   id: 'agent-wakeup',
