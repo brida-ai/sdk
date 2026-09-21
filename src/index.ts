@@ -276,8 +276,8 @@ export class BridaClient {
     if (!Number.isSafeInteger(options.maxStateBytes) || options.maxStateBytes < 1 || options.maxStateBytes > 262_144) {
       throw new TypeError('maxStateBytes must be an integer from 1 to 262144')
     }
-    const questionSetVersion = boundedToken(options.questionSetVersion, 'questionSetVersion', 128)
-    const policyVersion = boundedToken(options.policyVersion, 'policyVersion', 128)
+    const questionSetVersion = validateVersionedReference(options.questionSetVersion, 'questionSetVersion')
+    const policyVersion = validateVersionedReference(options.policyVersion, 'policyVersion')
     validateQuestionsInput(options.questions)
     validateDeclarativePolicyInput(options.declarativePolicy, options.questions)
     validateFixturesInput(options.fixtures, options.maxStateBytes, options.declarativePolicy)
@@ -431,6 +431,12 @@ function validateReflexId(value: string): string {
 function validateReflexVersion(value: string): string {
   const normalized = value.trim()
   if (!/^[1-9][0-9]{0,8}$/u.test(normalized)) throw new TypeError('version is invalid')
+  return normalized
+}
+
+function validateVersionedReference(value: string, field: string): string {
+  const normalized = value.trim()
+  if (!VERSIONED_REFERENCE.test(normalized)) throw new TypeError(`${field} is invalid`)
   return normalized
 }
 
