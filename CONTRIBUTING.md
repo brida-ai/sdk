@@ -3,11 +3,13 @@
 Good-faith issues and pull requests are welcome.
 
 ## What belongs here
-- bugs reproducible against the public contract;
-- public feature requests;
-- documentation and examples;
-- interoperability improvements;
-- public schemas/recipes where applicable.
+- bugs reproducible against the public SDK contract;
+- public SDK feature requests;
+- product namespace client/types/validation changes for released public contracts;
+- SDK documentation and interoperability improvements;
+- synthetic fixtures required to test SDK behavior.
+
+Substantial product examples, recipes, templates, Skills and use-case catalogs belong in the corresponding public product repository. For Reflex, use `brida-ai/reflex`; link to product content from this SDK rather than duplicating it here.
 
 ## Pull requests
 1. Fork the repository and work in your branch.
