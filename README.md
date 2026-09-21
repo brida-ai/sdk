@@ -99,7 +99,7 @@ const result = await brida.reflex.run('lead-fit', {
 })
 ```
 
-Custom Reflex definitions are declarative only: bounded questions, bounded branch policy, synthetic or redacted fixtures, explicit activation, and immutable active versions. They never grant tool or side-effect authority. Authoring requires a key with `reflex:write`; read/run authority alone is not enough. Activation evaluates the draft fixtures through the normal hosted Reflex pipeline and consumes bounded Decision Capacity; retrying the same activation reuses idempotent fixture evaluations instead of silently executing them twice. During Free Preview use only non-sensitive state and never place credentials or reusable secrets in fixtures or run state.
+Custom Reflex definitions are declarative only: bounded questions, bounded branch policy, synthetic or redacted fixtures, explicit activation, and immutable active versions. They never grant tool or side-effect authority. Authoring requires a key with `reflex:write`; read/run authority alone is not enough. **Developer Preview self-service keys are intentionally issued with `reflex:read + reflex:run` only; `reflex:write` is a separately approved authoring capability.** If your key does not have `reflex:write`, you may prepare and validate a definition locally, but do not treat it as hosted or active. Activation evaluates the draft fixtures through the normal hosted Reflex pipeline and consumes bounded Decision Capacity; retrying the same activation reuses idempotent fixture evaluations instead of silently executing them twice. During Free Preview use only non-sensitive state and never place credentials or reusable secrets in fixtures or run state.
 
 ## Data class
 
