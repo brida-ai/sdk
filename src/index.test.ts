@@ -451,6 +451,44 @@ describe('BridaClient Reflex', () => {
     })
   })
 
+  it('preserves HTTP status and idempotency semantics for malformed JSON error envelopes', async () => {
+    const client = new BridaClient({
+      apiKey: 'brida_test_key',
+      fetch: async () => jsonResponse({ error: {}, trace_id: 'trace_bad_error' }, 503),
+    })
+    const error = await client.reflex.run('agent-wakeup', {
+      state: { synthetic: true },
+      idempotencyKey: 'logical-run-bad-error',
+    }).catch((value: unknown) => value)
+    expect(error).toBeInstanceOf(BridaApiError)
+    if (!(error instanceof BridaApiError)) throw new Error('expected BridaApiError')
+    expect(error).toMatchObject({
+      status: 503,
+      code: 'invalid_error_response',
+      type: 'api_error',
+      traceId: 'trace_bad_error',
+      idempotencyKey: 'logical-run-bad-error',
+      retryable: true,
+    })
+  })
+
+  it('marks explicit caller cancellation as non-retryable without executing fetch', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('synthetic caller cancellation'))
+    const fetchMock = vi.fn()
+    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+    const error = await client.reflex.run('agent-wakeup', {
+      state: { synthetic: true },
+      idempotencyKey: 'logical-run-cancelled',
+      signal: controller.signal,
+    }).catch((value: unknown) => value)
+    expect(error).toBeInstanceOf(BridaNetworkError)
+    if (!(error instanceof BridaNetworkError)) throw new Error('expected BridaNetworkError')
+    expect(error.idempotencyKey).toBe('logical-run-cancelled')
+    expect(error.retryable).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('surfaces the generated idempotency key on unknown transport outcome', async () => {
     let observedKey: string | null = null
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {

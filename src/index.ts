@@ -195,16 +195,16 @@ export class BridaApiError extends Error {
 
 export class BridaNetworkError extends Error {
   override readonly name = 'BridaNetworkError'
+  readonly retryable: boolean
 
   constructor(
     message: string,
     readonly idempotencyKey: string | undefined,
-    options?: ErrorOptions,
+    options?: ErrorOptions & Readonly<{ retryable?: boolean }>,
   ) {
     super(message, options)
+    this.retryable = options?.retryable ?? true
   }
-
-  readonly retryable = true
 }
 
 export class BridaResponseError extends Error {
@@ -359,6 +359,13 @@ export class BridaClient {
       signal?: AbortSignal
     }>,
   ): Promise<unknown> {
+    if (input.signal?.aborted === true) {
+      throw new BridaNetworkError(
+        'The Brida API request was cancelled by the caller.',
+        input.idempotencyKey,
+        { cause: input.signal.reason, retryable: false },
+      )
+    }
     let response: Response
     try {
       response = await this.#fetch(`${this.#baseUrl}${path}`, {
@@ -374,10 +381,13 @@ export class BridaClient {
         redirect: 'error',
       })
     } catch (cause) {
+      const cancelled = Boolean(input.signal?.aborted)
       throw new BridaNetworkError(
-        'The Brida API request failed before receiving an HTTP response.',
+        cancelled
+          ? 'The Brida API request was cancelled by the caller.'
+          : 'The Brida API request failed before receiving an HTTP response.',
         input.idempotencyKey,
-        { cause },
+        { cause, retryable: !cancelled },
       )
     }
 
@@ -692,11 +702,25 @@ function parseApiError(status: number, value: unknown, idempotencyKey: string | 
       idempotencyKey,
     )
   }
+  const message = optionalString(value.error.message)
+  const code = optionalString(value.error.code)
+  const type = optionalString(value.error.type)
+  if (message === undefined || code === undefined || type === undefined) {
+    return new BridaApiError(
+      `The Brida API returned HTTP ${status} with an invalid JSON error envelope.`,
+      status,
+      'invalid_error_response',
+      'api_error',
+      optionalString(value.trace_id),
+      optionalString(value.error.param),
+      idempotencyKey,
+    )
+  }
   return new BridaApiError(
-    requiredString(value.error.message, 'error.message'),
+    message,
     status,
-    requiredString(value.error.code, 'error.code'),
-    requiredString(value.error.type, 'error.type'),
+    code,
+    type,
     optionalString(value.trace_id),
     optionalString(value.error.param),
     idempotencyKey,
