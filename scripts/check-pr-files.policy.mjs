@@ -23,6 +23,7 @@ test('external PRs cannot alter release, workflow, dependency or governance cont
     'pnpm-lock.yaml',
     '.npmrc',
     'SECURITY.md',
+    'ARCHITECTURE.md',
     'RELEASING.md',
     'AGENTS.md',
   ]) {
@@ -42,4 +43,20 @@ test('external PRs cannot bypass the boundary by renaming a protected path', () 
     }]),
     /maintainer-only control-plane/u,
   )
+})
+
+
+test('external PRs cannot add product catalogs to the shared SDK', () => {
+  for (const filename of [
+    'examples/reflex.ts',
+    'recipes/example.yaml',
+    'skills/reflex/SKILL.md',
+    'patterns/reflex.md',
+    'fixtures/reflex.json',
+  ]) {
+    assert.throws(
+      () => checkExternalPullRequestFiles([{ filename, status: 'added' }]),
+      /product catalog path belongs in a product repository/u,
+    )
+  }
 })
