@@ -264,7 +264,7 @@ export class BridaClient {
   }
 
   async #getReflex(reflexId: string): Promise<ReflexDefinition> {
-    const id = boundedIdentifier(reflexId, 'reflexId')
+    const id = validateReflexId(reflexId)
     const body = await this.#request(`/v1/reflexes/${encodeURIComponent(id)}`, { method: 'GET' })
     return parseReflexDefinition(body)
   }
@@ -320,14 +320,14 @@ export class BridaClient {
   }
 
   async #runReflex(reflexId: string, options: RunReflexOptions): Promise<ReflexRunResult> {
-    const id = boundedIdentifier(reflexId, 'reflexId')
+    const id = validateReflexId(reflexId)
     validateJson(options.state, 'state')
     const version = options.version === undefined
       ? undefined
-      : boundedIdentifier(options.version, 'version')
+      : validateReflexVersion(options.version)
     const clientRef = options.metadata?.clientRef === undefined
       ? undefined
-      : boundedToken(options.metadata.clientRef, 'metadata.clientRef', 128)
+      : validateClientRef(options.metadata.clientRef)
     const idempotencyKey = options.idempotencyKey === undefined
       ? createIdempotencyKey()
       : validateIdempotencyKey(options.idempotencyKey)
@@ -437,6 +437,14 @@ function validateReflexVersion(value: string): string {
 function validateVersionedReference(value: string, field: string): string {
   const normalized = value.trim()
   if (!VERSIONED_REFERENCE.test(normalized)) throw new TypeError(`${field} is invalid`)
+  return normalized
+}
+
+function validateClientRef(value: string): string {
+  const normalized = value.trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$/u.test(normalized)) {
+    throw new TypeError('metadata.clientRef is invalid')
+  }
   return normalized
 }
 
