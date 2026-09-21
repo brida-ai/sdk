@@ -15,6 +15,7 @@ export type {
   ReflexDefinition,
   ReflexEvidence,
   ReflexListResponse,
+  ReflexNamespace,
   ReflexQuestion,
   ReflexRunResult,
   ReflexVersionDefinition,
