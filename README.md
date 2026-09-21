@@ -2,7 +2,7 @@
 
 Official TypeScript SDK for the Brida API.
 
-> **Developer Preview:** the source repository is public. The npm package remains unpublished until the Reflex release gate is complete. Public contracts may expand, but released versions will not silently expose Brida's hosted provider routing, credentials, tenancy internals or policy implementation.
+> **Developer Preview:** the source repository is public and `@brida/sdk` is the canonical npm package name. npm publication and hosted Reflex customer traffic are separate release gates. Public contracts may expand, but released versions will not silently expose Brida's hosted provider routing, credentials, tenancy internals or policy implementation.
 
 ## Install
 
@@ -10,7 +10,7 @@ Official TypeScript SDK for the Brida API.
 pnpm add @brida/sdk
 ```
 
-The package is not published until the Developer Preview release gate is complete.
+Use the npm package only after the requested version is visible in the public registry. Do not treat unreleased source or ad-hoc tarballs as a published SDK version.
 
 ## API-key safety
 
