@@ -7,6 +7,7 @@ import type {
   ReflexListResponse,
   ReflexRunResult,
   RunReflexOptions,
+  ReflexNamespace,
 } from './types.js'
 import {
   parseReflexDefinition,
@@ -24,7 +25,7 @@ import {
 } from './validation.js'
 
 /** Reflex product namespace for the root Brida client. */
-export class ReflexClient {
+export class ReflexClient implements ReflexNamespace {
   readonly #transport: BridaTransport
 
   readonly custom: Readonly<{

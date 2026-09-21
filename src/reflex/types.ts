@@ -148,3 +148,15 @@ export interface RunReflexOptions {
   readonly idempotencyKey?: string
   readonly signal?: AbortSignal
 }
+
+/** Public shape of the Reflex product namespace exposed as `brida.reflex`. */
+export interface ReflexNamespace {
+  list(): Promise<ReflexListResponse>
+  get(reflexId: string): Promise<ReflexDefinition>
+  run(reflexId: string, options: RunReflexOptions): Promise<ReflexRunResult>
+  readonly custom: Readonly<{
+    draft(options: DraftCustomReflexOptions): Promise<ReflexDefinition>
+    activate(reflexId: string, version: string, options?: CustomReflexVersionOptions): Promise<ReflexDefinition>
+    retire(reflexId: string, version: string, options?: CustomReflexVersionOptions): Promise<ReflexDefinition>
+  }>
+}
