@@ -2,7 +2,9 @@
 
 Please do not open a public issue for a suspected vulnerability that could expose users, credentials, infrastructure or private data.
 
-Until a dedicated disclosure channel is published, contact Brida maintainers privately through the security contact listed on the Brida organization/profile.
+Use GitHub's private vulnerability reporting for this repository from the **Security** tab and choose **Report a vulnerability**. This is the preferred disclosure channel because it keeps the report private while maintainers investigate and coordinate remediation.
+
+If private vulnerability reporting is unavailable to you, contact Brida maintainers privately through the security contact listed on the Brida organization/profile.
 
 ## Public repository security rules
 - never submit real API keys or provider credentials;
