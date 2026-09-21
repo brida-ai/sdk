@@ -31,9 +31,9 @@
     "check": "pnpm typecheck && pnpm test && pnpm test:policy && pnpm build && pnpm check:public"
   },
   "devDependencies": {
+    "@types/node": "^22.20.4",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10",
-    "@types/node": "^24.0.0"
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "access": "public"
