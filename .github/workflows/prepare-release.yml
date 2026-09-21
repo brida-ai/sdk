@@ -54,10 +54,12 @@ jobs:
       - name: Prepare manifest version
         id: plan
         shell: bash
+        env:
+          RELEASE_IMPACT: ${{ inputs.impact }}
         run: |
           set -euo pipefail
           SOURCE_SHA="$(git rev-parse HEAD)"
-          node scripts/release/prepare.mjs --impact "${{ inputs.impact }}" | tee /tmp/release-plan.json
+          node scripts/release/prepare.mjs "$RELEASE_IMPACT" | tee /tmp/release-plan.json
           VERSION="$(node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('/tmp/release-plan.json','utf8').trim());process.stdout.write(x.version)")"
           PREVIOUS_VERSION="$(node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('/tmp/release-plan.json','utf8').trim());process.stdout.write(x.previousVersion)")"
           TAG="v$VERSION"
