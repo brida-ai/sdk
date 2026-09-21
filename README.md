@@ -39,6 +39,10 @@ pnpm add @brida/sdk
 
 Use the npm package only after the requested version is visible in the public registry. Do not treat unreleased source or ad-hoc tarballs as a published SDK version.
 
+### Module format
+
+`@brida/sdk` 0.1 is an **ESM package**. Use standard `import` syntax as shown in this README. The supported Node floor is Node 22.0.0 for ESM consumers. A synchronous CommonJS `require('@brida/sdk')` is not part of the 0.1 contract; CommonJS applications can use dynamic `import()` instead.
+
 ## Architecture
 
 The SDK is intentionally thin:

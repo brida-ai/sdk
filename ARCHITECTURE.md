@@ -64,6 +64,7 @@ Product namespace code may depend on the shared client substrate. Shared client 
 7. Provider credentials, routing, tenant authority, billing authority and approval policy never enter the SDK.
 8. A new product namespace must be additive unless a semver-major change is explicitly justified.
 9. Public contract generation may later consume an allowlisted OpenAPI/JSON-Schema projection; private implementation trees are never mirrored into this repository.
+10. The initial package is ESM-only. Do not add a parallel CommonJS build or `require` export without an explicit compatibility need and contract tests across the supported Node floor.
 
 ## TypeScript naming and wire contracts
 
