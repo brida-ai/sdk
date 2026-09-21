@@ -1,9 +1,9 @@
-import { BridaClient, createIdempotencyKey } from '@brida/sdk'
+import { Brida, createIdempotencyKey } from '@brida/sdk'
 
 const apiKey = process.env.BRIDA_API_KEY
 if (!apiKey) throw new Error('Set BRIDA_API_KEY before running this example.')
 
-const brida = new BridaClient({ apiKey })
+const brida = new Brida({ apiKey })
 
 const result = await brida.reflex.run('agent-wakeup', {
   idempotencyKey: createIdempotencyKey(),
