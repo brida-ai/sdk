@@ -382,6 +382,24 @@ describe('BridaClient Reflex', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('rejects invalid Reflex identifiers, versions and client refs before network execution', async () => {
+    const fetchMock = vi.fn()
+    const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
+
+    await expect(client.reflex.get('Bad Id')).rejects.toThrow(/reflexId is invalid/u)
+    await expect(client.reflex.run('Bad Id', { state: { synthetic: true } })).rejects.toThrow(/reflexId is invalid/u)
+    await expect(client.reflex.run('agent-wakeup', {
+      version: 'v3',
+      state: { synthetic: true },
+    })).rejects.toThrow(/version is invalid/u)
+    await expect(client.reflex.run('agent-wakeup', {
+      state: { synthetic: true },
+      metadata: { clientRef: 'bad client ref' },
+    })).rejects.toThrow(/clientRef is invalid/u)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('maps the public run contract and preserves caller idempotency exactly', async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe('https://preview.brida.test/v1/reflexes/agent-wakeup/runs')
