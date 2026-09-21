@@ -5,32 +5,34 @@ on:
     branches: [main]
     types: [closed]
 
-permissions:
-  contents: write
-  id-token: write
-
 concurrency:
   group: sdk-release-finalize
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Verify, tag and publish exact reviewed release
+  verify:
+    name: Verify and package exact reviewed release
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       startsWith(github.event.pull_request.head.ref, 'release/v')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      GH_TOKEN: ${{ github.token }}
+    permissions:
+      contents: read
+    outputs:
+      source_sha: ${{ steps.identity.outputs.source_sha }}
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+      publish_needed: ${{ steps.identity.outputs.publish_needed }}
+      package_sha256: ${{ steps.package.outputs.package_sha256 }}
     steps:
-      - name: Checkout exact reviewed merge commit
+      - name: Checkout exact reviewed merge commit without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -38,18 +40,18 @@ jobs:
           version: 11.21.0
           run_install: false
 
-      - name: Set up Node.js for npm Trusted Publishing
+      - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       - name: Install from lockfile
         run: pnpm install --frozen-lockfile
 
       - name: Re-run the full public release gates
         run: |
+          set -euo pipefail
           pnpm check
           npm pack --dry-run
 
@@ -58,6 +60,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          if [ "$SOURCE_SHA" != "${{ github.event.pull_request.merge_commit_sha }}" ]; then
+            echo "Checkout is not the reviewed merge commit." >&2
+            exit 1
+          fi
           VERSION="$(node -p "require('./package.json').version")"
           TAG="v$VERSION"
           EXPECTED_BRANCH="release/$TAG"
@@ -74,23 +81,63 @@ jobs:
               echo "Refusing first-attempt release: @brida/sdk@$VERSION already exists on npm." >&2
               exit 1
             fi
-            echo "publish_needed=false" >> "$GITHUB_OUTPUT"
+            PUBLISH_NEEDED=false
           else
-            echo "publish_needed=true" >> "$GITHUB_OUTPUT"
+            PUBLISH_NEEDED=true
           fi
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "publish_needed=$PUBLISH_NEEDED" >> "$GITHUB_OUTPUT"
+
+      - name: Build exact npm tarball
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          PACKAGE_NAME="$(npm pack --silent --pack-destination release)"
+          test -f "release/$PACKAGE_NAME"
+          PACKAGE_SHA256="$(sha256sum "release/$PACKAGE_NAME" | awk '{print $1}')"
+          echo "package_sha256=$PACKAGE_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified package artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sdk-release-${{ steps.identity.outputs.source_sha }}
+          path: release/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  tag:
+    name: Create immutable source tag
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout exact verified source for tag creation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Create or verify immutable tag
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ steps.identity.outputs.tag }}"
+          TAG="${{ needs.verify.outputs.tag }}"
           SHA="$(git rev-parse HEAD)"
+          if [ "$SHA" != "${{ needs.verify.outputs.source_sha }}" ]; then
+            echo "Tag job source identity mismatch." >&2
+            exit 1
+          fi
           if git rev-parse "$TAG^{commit}" >/dev/null 2>&1; then
             TAG_SHA="$(git rev-parse "$TAG^{commit}")"
             if [ "$TAG_SHA" != "$SHA" ]; then
-              echo "Refusing to move existing tag $TAG from $TAG_SHA to $SHA" >&2
+              echo "Refusing mismatched existing tag $TAG at $TAG_SHA" >&2
               exit 1
             fi
           else
@@ -100,15 +147,54 @@ jobs:
             git push origin "refs/tags/$TAG"
           fi
 
+  publish:
+    name: Publish verified tarball through npm OIDC
+    needs: [verify, tag]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Set up Node.js for npm Trusted Publishing
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Download exact verified package artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sdk-release-${{ needs.verify.outputs.source_sha }}
+          path: release
+
+      - name: Verify package artifact identity
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t PACKAGES < <(find release -maxdepth 1 -type f -name '*.tgz' -print)
+          if [ "${#PACKAGES[@]}" -ne 1 ]; then
+            echo "Expected exactly one verified npm tarball." >&2
+            exit 1
+          fi
+          PACKAGE="${PACKAGES[0]}"
+          ACTUAL_SHA256="$(sha256sum "$PACKAGE" | awk '{print $1}')"
+          if [ "$ACTUAL_SHA256" != "${{ needs.verify.outputs.package_sha256 }}" ]; then
+            echo "Verified package digest mismatch." >&2
+            exit 1
+          fi
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+
       - name: Publish exact package through npm Trusted Publishing
-        if: steps.identity.outputs.publish_needed == 'true'
-        run: npm publish --access public --provenance
+        if: needs.verify.outputs.publish_needed == 'true'
+        run: npm publish "${{ steps.package.outputs.package }}" --access public --provenance
 
       - name: Verify npm publication
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${{ steps.identity.outputs.version }}"
+          VERSION="${{ needs.verify.outputs.version }}"
           for attempt in 1 2 3 4 5; do
             if npm view "@brida/sdk@$VERSION" version >/dev/null 2>&1; then
               exit 0
@@ -118,13 +204,27 @@ jobs:
           echo "Published package version did not become visible in npm." >&2
           exit 1
 
+  release:
+    name: Create immutable GitHub Release
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
       - name: Create or verify GitHub Release
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ steps.identity.outputs.tag }}"
+          TAG="${{ needs.verify.outputs.tag }}"
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "GitHub Release $TAG already exists; leaving it immutable."
           else
-            gh release create "$TAG" --repo "${{ github.repository }}"               --verify-tag --generate-notes --title "@brida/sdk ${{ steps.identity.outputs.version }}"
+            gh release create "$TAG" \
+              --repo "${{ github.repository }}" \
+              --verify-tag \
+              --generate-notes \
+              --title "@brida/sdk ${{ needs.verify.outputs.version }}"
           fi
