@@ -39,7 +39,7 @@ console.log(result.decision.reason)
 console.log(result.evidence)
 ```
 
-The default API endpoint is `https://api.brida.ai`. Pass `baseUrl` only when targeting another Brida deployment or a local test server.
+The default API endpoint is `https://api.brida.ai`. Pass `baseUrl` only when targeting another Brida deployment or a local test server. Credential-bearing remote endpoints must use HTTPS; plain HTTP is accepted only for loopback local development. The SDK also refuses HTTP redirects so an API key is never intentionally forwarded through a redirect chain.
 
 ## Idempotency and retries
 

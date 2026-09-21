@@ -88,10 +88,27 @@ describe('BridaClient Reflex', () => {
       expect(String(url)).toBe(`${BRIDA_API_URL}/v1/reflexes`)
       expect(new Headers(init?.headers).get('x-api-key')).toBe('brida_test_key')
       expect(new Headers(init?.headers).get('authorization')).toBeNull()
+      expect(init?.redirect).toBe('error')
       return jsonResponse({ object: 'list', data: [definition] })
     })
     const client = new BridaClient({ apiKey: 'brida_test_key', fetch: fetchMock })
     await expect(client.reflex.list()).resolves.toEqual({ object: 'list', data: [definition] })
+  })
+
+  it('requires HTTPS for credential-bearing remote API endpoints while allowing loopback HTTP', async () => {
+    expect(() => new BridaClient({
+      apiKey: 'brida_test_key',
+      baseUrl: 'http://api.example.test',
+    })).toThrow(/HTTPS/u)
+
+    const fetchMock = vi.fn(async () => jsonResponse({ object: 'list', data: [] }))
+    const local = new BridaClient({
+      apiKey: 'brida_test_key',
+      baseUrl: 'http://127.0.0.1:8787',
+      fetch: fetchMock,
+    })
+    await local.reflex.list()
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 
   it('lists and reads immutable Reflex metadata including data class', async () => {
