@@ -72,6 +72,8 @@ The default API endpoint is `https://api.brida.ai`. Pass `baseUrl` only when tar
 
 ## Reflex
 
+Reflex benchmark methodology and reproducible evaluation receipts live in [ReflexBench](https://github.com/brida-ai/reflexbench), Brida's open benchmark for System One models and typed decision engines.
+
 Reflex is available through `brida.reflex`:
 
 - `brida.reflex.list()`
