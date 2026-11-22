@@ -4,7 +4,9 @@ Official TypeScript SDK for the Brida platform.
 
 `@brida/sdk` is the single public SDK package for Brida. Product APIs are exposed as typed namespaces on one root client, so authentication, transport, errors, idempotency and future cross-product primitives stay consistent instead of being reimplemented by each product.
 
-Reflex is the first released product namespace:
+> **Status (November 2026):** Brida Reflex, the hosted service behind the `reflex` namespace, is archived ([notice](https://www.brida.ai/reflex)), so `brida.reflex.run` no longer reaches a public service. The SDK remains Brida's single public TypeScript package, and new namespaces will be added here as public Brida APIs are released.
+
+Reflex was the first product namespace:
 
 ```ts
 import { Brida } from '@brida/sdk'
