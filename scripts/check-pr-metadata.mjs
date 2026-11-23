@@ -3,6 +3,21 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const PR_BODY_FILE = '.pr-body.md'
+const DEPENDABOT_LOGIN = 'dependabot[bot]'
+const DEPENDABOT_DEFAULTS = [
+  '- release-impact: none',
+  '- release-note: none',
+  '- qa-scope: Dependabot dependency update; the required CI and CodeQL checks are its QA.',
+].join('\n')
+
+// Dependabot rewrites the PR body on every rebase, so metadata added by hand
+// does not survive. Its pull requests from this repository default to no
+// release. A maintainer who adds a release-impact line overrides the default.
+export function withDependabotDefaults(body, { author, sameRepository }) {
+  if (author !== DEPENDABOT_LOGIN || sameRepository !== true) return body
+  if (/^\s*-\s*release-impact:/imu.test(body)) return body
+  return `${body}\n\n${DEPENDABOT_DEFAULTS}\n`
+}
 
 export function checkPullRequestMetadata(body) {
   const impact = body.match(/^\s*-\s*release-impact:\s*(none|patch|minor|major)\s*$/imu)?.[1]
@@ -27,7 +42,10 @@ export function checkPullRequestMetadata(body) {
 }
 
 function runPolicyCheck() {
-  const body = readFileSync(PR_BODY_FILE, 'utf8')
+  const body = withDependabotDefaults(readFileSync(PR_BODY_FILE, 'utf8'), {
+    author: process.env.PR_AUTHOR,
+    sameRepository: process.env.PR_SAME_REPOSITORY === 'true',
+  })
   const result = checkPullRequestMetadata(body)
   if (result.errors.length > 0) {
     for (const error of result.errors) console.error(`::error title=Public PR metadata::${error}`)

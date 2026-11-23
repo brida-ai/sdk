@@ -47,4 +47,7 @@ jobs:
         run: node scripts/check-pr-files.mjs
 
       - name: Enforce release and QA metadata
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         run: node scripts/check-pr-metadata.mjs
